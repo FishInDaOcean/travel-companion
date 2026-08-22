@@ -9,148 +9,65 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import io
 
-# --- 1. Page Configuration & Adaptive UI ---
+# --- 1. Page Configuration & SaaS Design System ---
 st.set_page_config(
-    page_title="Travel Companion OS",
-    page_icon="🧭",
+    page_title="Travel Companion",
+    page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    :root {
-        --bg-glass: rgba(255, 255, 255, 0.85);
-        --border-glass: #e2e8f0;
-        --text-primary: #0f172a;
-        --text-secondary: #64748b;
-        --accent-glow: #0284c7;
-        --accent-gradient: linear-gradient(135deg, #0284c7 0%, #0ea5e9 50%, #38bdf8 100%);
-        --card-bg: #ffffff;
-        --badge-bg: #f0f9ff;
-        --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-    }
-
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg-glass: rgba(15, 23, 42, 0.8);
-            --border-glass: #334155;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent-glow: #38bdf8;
-            --accent-gradient: linear-gradient(135deg, #0369a1 0%, #0284c7 50%, #38bdf8 100%);
-            --card-bg: #1e293b;
-            --badge-bg: #0c4a6e;
-            --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
-        }
-    }
-
-    [data-theme="dark"] {
-        --bg-glass: rgba(15, 23, 42, 0.8);
-        --border-glass: #334155;
-        --text-primary: #f8fafc;
-        --text-secondary: #94a3b8;
-        --accent-glow: #38bdf8;
-        --accent-gradient: linear-gradient(135deg, #0369a1 0%, #0284c7 50%, #38bdf8 100%);
-        --card-bg: #1e293b;
-        --badge-bg: #0c4a6e;
-    }
-
+    /* Clean typography & neutral baseline */
     html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    .font-brand {
-        font-family: 'Space Grotesk', sans-serif !important;
-        letter-spacing: -0.02em;
+    /* Modern tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 4px;
+        background-color: transparent;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        padding-bottom: 2px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 38px;
+        border-radius: 6px 6px 0 0;
+        font-weight: 500;
+        font-size: 0.9rem;
+        padding: 0 16px;
+        border: none !important;
+        background-color: transparent;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: transparent !important;
+        font-weight: 600 !important;
+        border-bottom: 2px solid #2563eb !important;
+        color: #2563eb !important;
     }
 
-    /* Cards */
-    .glass-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-glass);
-        border-radius: 18px;
-        padding: 22px;
-        margin-bottom: 16px;
-        box-shadow: var(--card-shadow);
-        backdrop-filter: blur(16px);
-        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .glass-card:hover {
-        transform: translateY(-2px);
-    }
-
-    /* Radar Widget */
-    .radar-card {
-        background: var(--accent-gradient);
-        border-radius: 20px;
-        padding: 24px;
-        color: white;
-        box-shadow: 0 15px 35px -5px rgba(2, 132, 199, 0.45);
-    }
-
-    .radar-badge {
-        background: rgba(255, 255, 255, 0.22);
-        padding: 4px 12px;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        backdrop-filter: blur(8px);
-    }
-
-    /* Micro Badges */
-    .chip-pill {
+    /* Minimalist status chips */
+    .status-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--badge-bg);
-        color: var(--accent-glow);
-        font-weight: 700;
-        font-size: 0.75rem;
-        padding: 4px 10px;
-        border-radius: 8px;
-        border: 1px solid var(--border-glass);
-    }
-
-    /* Tab Custom Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: var(--card-bg);
-        padding: 6px;
-        border-radius: 14px;
-        border: 1px solid var(--border-glass);
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 44px;
-        border-radius: 10px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.78rem;
         font-weight: 600;
-        color: var(--text-secondary);
-        border: none !important;
-        padding: 0 18px;
-    }
-    .stTabs [aria-selected="true"] {
-        background: var(--accent-glow) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
+        border: 1px solid rgba(128, 128, 128, 0.25);
     }
 
-    /* Button Glows */
+    /* Subtle buttons */
     .stButton > button {
-        border-radius: 9999px;
-        background-color: var(--accent-glow);
-        color: white;
-        font-weight: 700;
-        border: none;
-        padding: 0.55rem 1.6rem;
-        transition: all 0.2s ease;
-    }
-    .stButton > button:hover {
-        box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
-        color: white;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.88rem;
+        padding: 0.4rem 1rem;
+        transition: all 0.15s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -184,8 +101,7 @@ def init_db():
             title TEXT,
             category TEXT,
             estimated_cost REAL,
-            location_name TEXT,
-            status TEXT DEFAULT 'Planning'
+            location_name TEXT
         )
     """)
     conn.commit()
@@ -235,7 +151,7 @@ def delete_wishlist_item(item_id):
     conn.commit()
     conn.close()
 
-# --- 3. Live FX, Geocoding & Open-Meteo Weather Services ---
+# --- 3. Live FX, Weather & Geocoding Services ---
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
     url = f"https://open.er-api.com/v6/latest/{base}"
@@ -243,22 +159,21 @@ def fetch_live_rates(base="SGD"):
         res = requests.get(url, timeout=5)
         data = res.json()
         if data.get("result") == "success":
-            return data.get("rates", {}), "🟢 Live Online"
+            return data.get("rates", {}), "Connected"
     except Exception:
         pass
     fallback = {
         "CNY": 5.38, "JPY": 115.0, "MYR": 3.48, "THB": 26.8, "TWD": 24.2,
-        "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60, "VND": 19000.0,
-        "IDR": 12000.0, "AUD": 1.15
+        "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60, "VND": 19000.0, "AUD": 1.15
     }
-    return fallback, "🟠 Fallback Offline"
+    return fallback, "Offline Fallback"
 
 @st.cache_data(show_spinner=False)
 def geocode_place(place_name):
     if not place_name or place_name.strip() == "":
         return None, None
     try:
-        geolocator = Nominatim(user_agent="travel_companion_os_gz")
+        geolocator = Nominatim(user_agent="travel_companion_saas_prod")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         loc = geocode(place_name)
         if loc:
@@ -272,208 +187,167 @@ def get_live_weather(lat, lon):
     if not lat or not lon:
         return None
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,precipitation"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m"
         res = requests.get(url, timeout=5).json()
         current = res.get("current", {})
         temp = current.get("temperature_2m", 0)
-        humidity = current.get("relative_humidity_2m", 0)
         w_code = current.get("weather_code", 0)
         
-        condition = "☀️ Sunny / Clear"
-        tip = "Great weather for outdoor exploration!"
-        if w_code in [1, 2, 3]: 
-            condition = "⛅ Partly Cloudy"
-            tip = "Pleasant conditions for walking tours."
-        elif w_code in [45, 48]: 
-            condition = "🌫️ Foggy"
-            tip = "Low visibility at Canton Tower observation deck."
-        elif w_code in [51, 61, 80]: 
-            condition = "🌧️ Light Showers"
-            tip = "Carry a compact umbrella or rain shell."
-        elif w_code >= 63: 
-            condition = "⛈️ Heavy Rain / Thunderstorm"
-            tip = "Explore tea houses, malls, or museums."
+        condition = "Clear"
+        if w_code in [1, 2, 3]: condition = "Partly Cloudy"
+        elif w_code in [45, 48]: condition = "Foggy"
+        elif w_code in [51, 61, 80]: condition = "Rain Showers"
+        elif w_code >= 63: condition = "Heavy Rain"
         
-        if temp < 10: tip += " ❄️ Pack warm layers!"
-        elif temp > 32: tip += " 🥤 Stay hydrated & seek shade!"
-
-        return {
-            "temp": temp,
-            "humidity": humidity,
-            "condition": condition,
-            "wind": current.get("wind_speed_10m", 0),
-            "tip": tip
-        }
+        return {"temp": temp, "condition": condition, "wind": current.get("wind_speed_10m", 0)}
     except Exception:
         return None
 
 init_db()
 
-# --- 4. Sidebar Controls (Default: CNY / SGD Base) ---
+# --- 4. Sidebar Controls (Default: SGD -> CNY) ---
 with st.sidebar:
-    st.markdown("<h2 class='font-brand'>🧭 Trip Control Deck</h2>", unsafe_allow_html=True)
+    st.markdown("### Trip Settings")
     rates_dict, status_msg = fetch_live_rates("SGD")
-    st.caption(f"FX Feeds: **{status_msg}**")
-
-    # CNY is now the first choice in the list
-    popular_currencies = ["CNY", "JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
+    
+    popular_currencies = ["CNY", "JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "AUD", "Other"]
     selected_foreign = st.selectbox("Destination Currency", popular_currencies, index=0)
-    foreign_curr = st.text_input("Custom Currency Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
+    foreign_curr = st.text_input("Custom Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
 
     default_rate = float(rates_dict.get(foreign_curr, 5.38))
-    rate = st.number_input(f"Exchange Rate (1 SGD = X {foreign_curr})", value=default_rate, format="%.4f")
+    rate = st.number_input(f"Rate (1 SGD = X {foreign_curr})", value=default_rate, format="%.4f")
+    st.caption(f"FX Feed: **{status_msg}**")
 
-    st.markdown("---")
-    st.markdown("<h4 class='font-brand'>🎯 Trip Budget & Runway</h4>", unsafe_allow_html=True)
-    total_budget_sgd = st.number_input("Total Budget (SGD)", value=3500.0, step=100.0)
-    trip_days = st.number_input("Trip Duration (Days)", min_value=1, value=7, step=1)
-    
-    st.markdown("---")
-    st.markdown("<h4 class='font-brand'>👥 Travel Tribe</h4>", unsafe_allow_html=True)
-    members_str = st.text_input("Group Members", value="Me, Alex, Jordan")
+    st.divider()
+    st.markdown("### Financial Targets")
+    total_budget_sgd = st.number_input("Budget (SGD)", value=3500.0, step=100.0)
+    trip_days = st.number_input("Duration (Days)", min_value=1, value=7, step=1)
+
+    st.divider()
+    st.markdown("### Group Members")
+    members_str = st.text_input("Names (comma-separated)", value="Me, Alex, Jordan")
     members = [m.strip() for m in members_str.split(",") if m.strip()]
 
+# --- 5. Application Header & Telemetry ---
 df = get_expenses()
 total_spent_sgd = df["amount_home"].sum() if not df.empty else 0.0
+remaining_budget = total_budget_sgd - total_spent_sgd
+pct_spent = min(100.0, (total_spent_sgd / total_budget_sgd * 100.0)) if total_budget_sgd > 0 else 0.0
 
-# --- 5. Interactive Radar (Default: Guangzhou, China) & Hero ---
-col_hero, col_radar = st.columns([1.8, 1.2])
+col_head, col_weather = st.columns([2.2, 1.1])
 
-with col_hero:
-    st.markdown(f"""
-    <div class="glass-card" style="border-left: 6px solid var(--accent-glow); height: 100%;">
-        <div class="chip-pill">🇸🇬 SG BASE → {foreign_curr} TRIP</div>
-        <h1 class="font-brand" style="margin: 8px 0 4px 0; font-size: 2.2rem; color: var(--text-primary);">Travel Companion OS</h1>
-        <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">
-            Dynamic route analytics, live weather telemetry, and automated pairwise group splitting.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+with col_head:
+    st.markdown("## Travel Companion")
+    st.caption(f"Base: **SGD** • Active Trip: **{foreign_curr}** • Destination: **Guangzhou, China**")
 
-with col_radar:
-    radar_col1, radar_col2 = st.columns([2, 1])
-    with radar_col1:
-        custom_radar_city = st.text_input("📍 Radar Target City", value="Guangzhou, China", label_visibility="collapsed")
-    with radar_col2:
-        if st.button("🛰️ Scan Radar", use_container_width=True):
-            st.session_state.radar_city = custom_radar_city
-
-    active_city = st.session_state.get("radar_city", custom_radar_city)
-    r_lat, r_lon = geocode_place(active_city)
-    
-    # Hard fallback to Guangzhou, China if geocoding fails
-    if not r_lat:
-        r_lat, r_lon, active_city = 23.1291, 113.2644, "Guangzhou, China"
-
+with col_weather:
+    # Weather for Guangzhou default
+    r_lat, r_lon, active_city = 23.1291, 113.2644, "Guangzhou"
     weather = get_live_weather(r_lat, r_lon)
     if weather:
-        st.markdown(f"""
-        <div class="radar-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="radar-badge">LIVE RADAR • {active_city.upper()}</span>
-                <span style="font-size: 0.85rem; font-weight: 600;">💨 {weather['wind']} km/h</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px;">
-                <span style="font-size: 2.3rem; font-weight: 800; line-height: 1;">{weather['temp']}°C</span>
-                <span style="font-size: 1.05rem; font-weight: 700;">{weather['condition']}</span>
-            </div>
-            <div style="margin-top: 8px; font-size: 0.82rem; background: rgba(0,0,0,0.15); padding: 6px 10px; border-radius: 8px;">
-                💡 <b>Trip Insight:</b> {weather['tip']}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            w_c1, w_c2 = st.columns([1.5, 1])
+            with w_c1:
+                st.markdown(f"**{active_city}** &nbsp;•&nbsp; {weather['condition']}")
+                st.caption(f"Wind: {weather['wind']} km/h")
+            with w_c2:
+                st.markdown(f"### {weather['temp']}°C")
 
-# --- 6. Navigation Tabs ---
-tab_timeline, tab_map, tab_wishlist, tab_fx, tab_analytics, tab_log, tab_settle, tab_packing = st.tabs([
-    "🗓️ Itinerary Feed",
-    "🗺️ Interactive Route",
-    "✨ Wishlist & Bucket List",
-    "⚡ FX Simulator",
-    "📈 Financial Runway",
-    "➕ Log Expense",
-    "🤝 PayNow & Settle",
-    "🎒 Smart Packing"
+# --- 6. Quick Entry Bar ---
+with st.expander("➕ Log an Expense", expanded=False):
+    with st.form("quick_log_form", clear_on_submit=True):
+        col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+        with col_f1:
+            desc = st.text_input("Description*", placeholder="e.g., Dim Sum Lunch")
+            loc = st.text_input("Location / Landmark", placeholder="e.g., Tianhe District, Guangzhou")
+        with col_f2:
+            amt = st.number_input(f"Amount ({foreign_curr})*", min_value=0.0, step=10.0)
+            category = st.selectbox("Category", ["Food & Dining", "Transport", "Activities", "Accommodation", "Shopping", "Other"])
+        with col_f3:
+            payer = st.selectbox("Paid By", members if members else ["Me"])
+            t_day = st.number_input("Trip Day #", min_value=1, value=1, step=1)
+            exp_date = st.date_input("Date", value=date.today())
+
+        submitted = st.form_submit_button("Save Transaction", use_container_width=True)
+        if submitted:
+            if desc and amt > 0:
+                lat, lon = geocode_place(loc)
+                log_expense(desc, amt, foreign_curr, rate, payer, category, str(exp_date), loc, lat, lon, t_day)
+                st.toast(f"Saved: {desc}", icon="✅")
+                st.rerun()
+            else:
+                st.error("Please provide both a description and an amount.")
+
+# --- 7. Main Navigation Tabs ---
+tab_ledger, tab_map, tab_settle, tab_planner, tab_fx = st.tabs([
+    "Overview & Ledger",
+    "Route Map",
+    "Settlement",
+    "Planner & Packing",
+    "FX & Analytics"
 ])
 
-# --- TAB 1: Itinerary Timeline Feed ---
-with tab_timeline:
-    st.markdown("<h3 class='font-brand'>🗓️ Day-by-Day Timeline</h3>", unsafe_allow_html=True)
+# --- TAB 1: Overview & Ledger ---
+with tab_ledger:
+    # High-density metrics row
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Spend (SGD)", f"${total_spent_sgd:,.2f}", f"{pct_spent:.1f}% of budget")
+    m2.metric("Remaining Budget", f"${remaining_budget:,.2f}", f"${(remaining_budget/trip_days if trip_days>0 else 0):,.2f}/day")
+    m3.metric("Logged Entries", len(df))
+    m4.metric("Active FX Rate", f"1 SGD = {rate:.2f} {foreign_curr}")
+
+    st.progress(pct_spent / 100.0)
+    st.divider()
+
+    col_view1, col_view2 = st.columns([3, 1])
+    with col_view1:
+        st.markdown("#### Transaction Ledger")
+    with col_view2:
+        if not df.empty:
+            csv_buf = io.StringIO()
+            df.to_csv(csv_buf, index=False)
+            st.download_button("Export CSV", data=csv_buf.getvalue(), file_name=f"trip_ledger_{date.today()}.csv", mime="text/csv", use_container_width=True)
+
     if not df.empty:
-        days_present = sorted(df["trip_day"].unique())
-        for d in days_present:
-            day_df = df[df["trip_day"] == d]
-            day_total = day_df["amount_home"].sum()
+        # Formatted table view with clean columns
+        view_df = df[["trip_day", "expense_date", "description", "category", "amount_foreign", "currency", "amount_home", "paid_by", "location_name"]].copy()
+        view_df.columns = ["Day", "Date", "Description", "Category", "Foreign Amount", "Currency", "SGD Equivalent", "Paid By", "Location"]
+        
+        st.dataframe(
+            view_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "SGD Equivalent": st.column_config.NumberColumn(format="$%.2f"),
+                "Foreign Amount": st.column_config.NumberColumn(format="%.2f")
+            }
+        )
 
-            st.markdown(f"""
-            <div style="display: flex; align-items: center; justify-content: space-between; margin: 16px 0 8px 0;">
-                <span class="chip-pill" style="font-size: 0.85rem; padding: 6px 14px;">DAY {d} SCHEDULE</span>
-                <span style="font-weight: 700; color: var(--accent-glow);">${day_total:,.2f} SGD Spent</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            for _, item in day_df.iterrows():
-                loc_str = f"📍 {item['location_name']}" if item['location_name'] else "General Location"
-                st.markdown(f"""
-                <div class="glass-card" style="border-left: 4px solid var(--accent-glow);">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <span class="chip-pill">{item['category']}</span>
-                            <div style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-top: 4px;">{item['description']}</div>
-                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
-                                {loc_str} &nbsp;•&nbsp; 🗓️ {item['expense_date']} &nbsp;•&nbsp; Paid by <b>{item['paid_by']}</b>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 1.35rem; font-weight: 800; color: var(--accent-glow);">${item['amount_home']:,.2f} SGD</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">{item['amount_foreign']:,.0f} {item['currency']}</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
-        st.info("No timeline items logged yet. Record your stops in the 'Log Expense' tab!")
-
-# --- TAB 2: Filterable Route Map (Default: Guangzhou Center) ---
-with tab_map:
-    st.markdown("<h3 class='font-brand'>🗺️ Geographic Route & Pin Filters</h3>", unsafe_allow_html=True)
-
-    map_data = df.dropna(subset=["latitude", "longitude"])
-    missing_coords = len(df) - len(map_data)
-
-    if missing_coords > 0 and not df.empty:
-        with st.expander(f"⚠️ {missing_coords} expense(s) missing GPS coordinates"):
-            st.caption("Click to attempt auto-geocoding for transactions that have a location name.")
-            if st.button("🔄 Auto-Geocode Missing Entries"):
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                for _, row in df[df["latitude"].isna()].iterrows():
-                    if row["location_name"]:
-                        lat, lon = geocode_place(row["location_name"])
-                        if lat and lon:
-                            c.execute("UPDATE expenses SET latitude = ?, longitude = ? WHERE id = ?", (lat, lon, row["id"]))
-                conn.commit()
-                conn.close()
-                st.toast("Coordinates synced!", icon="✅")
+        with st.expander("Manage Records"):
+            del_id = st.selectbox("Select entry to remove", df["id"].tolist(), format_func=lambda x: f"ID #{x} — {df[df['id']==x]['description'].values[0]} (${df[df['id']==x]['amount_home'].values[0]:.2f} SGD)")
+            if st.button("Delete Entry", type="secondary"):
+                delete_expense(del_id)
                 st.rerun()
+    else:
+        st.info("No expenses logged yet. Use the quick entry bar above to record your first stop.")
 
-    c_filter1, c_filter2 = st.columns([2, 1])
-    with c_filter1:
+# --- TAB 2: Filterable Route Map ---
+with tab_map:
+    map_data = df.dropna(subset=["latitude", "longitude"])
+    
+    col_m1, col_m2 = st.columns([3, 1])
+    with col_m1:
         categories = ["All Categories"] + (list(map_data["category"].unique()) if not map_data.empty else [])
-        selected_cat = st.selectbox("Filter by Category", categories)
-    with c_filter2:
-        show_routes = st.checkbox("Draw Route Lines", value=True)
+        selected_cat = st.selectbox("Filter Pins by Category", categories, label_visibility="collapsed")
+    with col_m2:
+        draw_lines = st.checkbox("Connect Route Lines", value=True)
 
     filtered_map = map_data if selected_cat == "All Categories" else map_data[map_data["category"] == selected_cat]
 
-    # Center logic: Filtered pins -> Active Radar City -> Guangzhou Coordinates
-    if not filtered_map.empty:
-        center_lat = float(filtered_map["latitude"].mean())
-        center_lon = float(filtered_map["longitude"].mean())
-        zoom = 12
-    elif 'r_lat' in locals() and r_lat:
-        center_lat, center_lon, zoom = float(r_lat), float(r_lon), 11
-    else:
-        center_lat, center_lon, zoom = 23.1291, 113.2644, 11
+    center_lat, center_lon, zoom = (
+        (float(filtered_map["latitude"].mean()), float(filtered_map["longitude"].mean()), 12)
+        if not filtered_map.empty else (23.1291, 113.2644, 11)
+    )
 
     m = folium.Map(location=[center_lat, center_lon], zoom_start=zoom, tiles="CartoDB positron")
 
@@ -481,278 +355,147 @@ with tab_map:
     if not filtered_map.empty:
         for _, row in filtered_map.iterrows():
             points.append([float(row["latitude"]), float(row["longitude"])])
-            popup_html = f"""
-            <div style='font-family: sans-serif; min-width: 170px;'>
-                <b style='color: #0284c7; font-size: 13px;'>{row['description']}</b><br>
-                <b>Cost:</b> ${row['amount_home']:.2f} SGD<br>
-                <b>Day {row['trip_day']}</b> • Paid by {row['paid_by']}
-            </div>
-            """
+            popup_html = f"<b>{row['description']}</b><br>Day {row['trip_day']} • ${row['amount_home']:.2f} SGD<br>Paid by: {row['paid_by']}"
             folium.Marker(
                 [float(row["latitude"]), float(row["longitude"])],
-                popup=folium.Popup(popup_html, max_width=250),
-                tooltip=f"Day {row['trip_day']}: {row['description']} (${row['amount_home']:.2f} SGD)",
-                icon=folium.Icon(color="info", icon="map-pin", prefix="fa")
+                popup=folium.Popup(popup_html, max_width=220),
+                tooltip=f"Day {row['trip_day']}: {row['description']}",
+                icon=folium.Icon(color="blue", icon="info-sign")
             ).add_to(m)
 
-        if show_routes and len(points) > 1:
-            folium.PolyLine(points, color="#0284c7", weight=3, opacity=0.8, dash_array="6, 10").add_to(m)
+        if draw_lines and len(points) > 1:
+            folium.PolyLine(points, color="#2563eb", weight=3, opacity=0.7, dash_array="5, 10").add_to(m)
 
-    st_folium(m, height=520, use_container_width=True)
+    st_folium(m, height=480, use_container_width=True)
 
-    if filtered_map.empty:
-        st.info("💡 To plot pins on this map, include a recognizable landmark or city (e.g., 'Canton Tower, Guangzhou') when saving an expense.")
-
-# --- TAB 3: Wishlist & Bucket List ---
-with tab_wishlist:
-    st.markdown("<h3 class='font-brand'>✨ Places to Visit & Bucket List</h3>", unsafe_allow_html=True)
-    st.caption("Plan bucket-list spots before you go. Convert them directly into logged expenses later!")
-
-    with st.form("wishlist_form", clear_on_submit=True):
-        w_c1, w_c2, w_c3, w_c4 = st.columns([2, 1, 1, 1])
-        with w_c1:
-            w_title = st.text_input("Wishlist Item / Spot", placeholder="e.g., Canton Tower Observation Deck")
-        with w_c2:
-            w_cat = st.selectbox("Category", ["Activities", "Food & Dining", "Shopping", "Transport", "Other"])
-        with w_c3:
-            w_cost = st.number_input(f"Est. Cost ({foreign_curr})", min_value=0.0, step=10.0)
-        with w_c4:
-            w_loc = st.text_input("Location", placeholder="e.g., Guangzhou")
-        
-        w_submit = st.form_submit_button("➕ Add to Bucket List", use_container_width=True)
-        if w_submit and w_title:
-            add_wishlist_item(w_title, w_cat, w_cost, w_loc)
-            st.toast(f"Added: {w_title}", icon="🎯")
-            st.rerun()
-
-    wish_df = get_wishlist()
-    if not wish_df.empty:
-        for _, item in wish_df.iterrows():
-            st.markdown(f"""
-            <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span class="chip-pill">{item['category']}</span>
-                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 4px;">{item['title']}</div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary);">📍 {item['location_name'] or 'Not specified'}</div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 1.25rem; font-weight: 800; color: var(--accent-glow);">
-                        ~${(item['estimated_cost']/rate if rate > 0 else 0):,.2f} SGD
-                    </div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary);">{item['estimated_cost']:,.0f} {foreign_curr}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c_del1, c_del2 = st.columns([4, 1])
-            with c_del2:
-                if st.button("🗑️ Remove", key=f"del_wish_{item['id']}"):
-                    delete_wishlist_item(item['id'])
-                    st.rerun()
-    else:
-        st.info("Your wishlist is empty. Add ideas above!")
-
-# --- TAB 4: Live FX Matrix & Interactive Simulator ---
-with tab_fx:
-    st.markdown("<h3 class='font-brand'>⚡ Live Currency Simulator & Matrix</h3>", unsafe_allow_html=True)
-    
-    sim_col1, sim_col2 = st.columns(2)
-    with sim_col1:
-        st.markdown(f"""
-        <div class="glass-card">
-            <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">Interactive FX Calculator</h4>
-            <span style="font-size: 0.85rem; color: var(--text-secondary);">Calculate real-time foreign cost to SGD:</span>
-        </div>
-        """, unsafe_allow_html=True)
-        fx_slider = st.slider(f"Foreign Price in {foreign_curr}", min_value=0, max_value=20000, value=1500, step=50)
-        sgd_val = fx_slider / rate if rate > 0 else 0.0
-        
-        st.markdown(f"""
-        <div class="glass-card" style="text-align: center; border-left: 5px solid var(--accent-glow);">
-            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Equivalent SGD Cost</div>
-            <div style="font-size: 2.2rem; font-weight: 800; color: var(--accent-glow);">${sgd_val:,.2f} SGD</div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary);">Conversion base: 1 SGD = {rate} {foreign_curr}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with sim_col2:
-        st.markdown("<h4 class='font-brand'>Popular Currency Matrix (per 1 SGD)</h4>", unsafe_allow_html=True)
-        matrix_data = []
-        for curr_code, curr_rate in rates_dict.items():
-            if curr_code in ["CNY", "JPY", "MYR", "THB", "KRW", "TWD", "USD", "EUR", "GBP", "AUD"]:
-                matrix_data.append({
-                    "Currency": curr_code,
-                    "Rate (1 SGD =)": f"{curr_rate:,.2f} {curr_code}",
-                    "$100 SGD Worth": f"{(100 * curr_rate):,.2f} {curr_code}"
-                })
-        st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
-
-# --- TAB 5: Burn Rate & Financial Telemetry ---
-with tab_analytics:
-    st.markdown("<h3 class='font-brand'>📈 Burn Rate & Budget Runway</h3>", unsafe_allow_html=True)
-    remaining_budget = total_budget_sgd - total_spent_sgd
-    pct_spent = min(100.0, (total_spent_sgd / total_budget_sgd * 100.0)) if total_budget_sgd > 0 else 0.0
-
-    b1, b2, b3 = st.columns(3)
-    b1.metric("Budget Remaining", f"${remaining_budget:,.2f} SGD", f"{100 - pct_spent:.1f}% left")
-    b2.metric("Total Spent", f"${total_spent_sgd:,.2f} SGD")
-    daily_allowance = remaining_budget / trip_days if trip_days > 0 else 0.0
-    b3.metric("Safe Daily Allowance", f"${daily_allowance:,.2f} SGD/day")
-
-    st.progress(pct_spent / 100.0)
-
-    if not df.empty:
-        c_left, c_right = st.columns(2)
-        with c_left:
-            st.subheader("Category Distribution")
-            cat_totals = df.groupby("category")["amount_home"].sum()
-            st.bar_chart(cat_totals, color="#0284c7")
-        with c_right:
-            st.subheader("Daily Spending Trajectory")
-            day_totals = df.groupby("trip_day")["amount_home"].sum()
-            st.line_chart(day_totals, color="#38bdf8")
-
-        st.markdown("---")
-        st.markdown("<h4 class='font-brand'>📥 Export Ledger</h4>", unsafe_allow_html=True)
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        st.download_button(
-            label="Download Complete Trip CSV",
-            data=csv_buffer.getvalue(),
-            file_name=f"trip_ledger_{date.today()}.csv",
-            mime="text/csv"
-        )
-
-# --- TAB 6: Log Expense & Action Form ---
-with tab_log:
-    st.markdown("<h3 class='font-brand'>➕ Record New Transaction</h3>", unsafe_allow_html=True)
-    with st.form("modern_logger_gz", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            desc = st.text_input("Activity / Item*", placeholder="e.g., Dim Sum at Guangzhou Restaurant")
-            amt = st.number_input(f"Cost in {foreign_curr}*", min_value=0.0, step=10.0)
-            category = st.selectbox("Category", ["Food & Dining", "Transport", "Activities", "Accommodation", "Shopping", "Nightlife", "Other"])
-            loc = st.text_input("City / Location Name (Optional)", placeholder="e.g., Tianhe District, Guangzhou")
-        with c2:
-            t_day = st.number_input("Trip Day #", min_value=1, value=1, step=1)
-            payer = st.selectbox("Paid By", members if members else ["Me"])
-            exp_date = st.date_input("Date", value=date.today())
-            st.caption(f"Estimated Conversion: **{(amt/rate if rate > 0 else 0):,.2f} SGD**")
-
-        submit = st.form_submit_button("💾 Save Activity", use_container_width=True)
-        if submit:
-            if desc and amt > 0:
-                lat, lon = geocode_place(loc)
-                log_expense(desc, amt, foreign_curr, rate, payer, category, str(exp_date), loc, lat, lon, t_day)
-                st.toast(f"Successfully recorded: {desc}", icon="🎉")
-                st.rerun()
-            else:
-                st.error("Please provide both a description and an amount.")
-
-    with st.expander("🗑️ Delete a Transaction"):
-        if not df.empty:
-            del_id = st.selectbox("Pick Entry to Delete", df["id"].tolist(), format_func=lambda x: f"ID #{x} - {df[df['id']==x]['description'].values[0]}")
-            if st.button("Delete Permanently"):
-                delete_expense(del_id)
-                st.rerun()
-
-# --- TAB 7: PayNow Settlement Engine ---
+# --- TAB 3: Settlement Engine ---
 with tab_settle:
-    st.markdown("<h3 class='font-brand'>🤝 Group PayNow Settlement Engine</h3>", unsafe_allow_html=True)
+    st.markdown("#### Fair Share & Group Settlement")
     if not df.empty and members:
         fair_share = total_spent_sgd / len(members)
         paid_map = df.groupby("paid_by")["amount_home"].sum().to_dict()
         balances = {m: paid_map.get(m, 0.0) - fair_share for m in members}
 
-        debtors = [[m, -bal] for m, bal in balances.items() if bal < -0.01]
-        creditors = [[m, bal] for m, bal in balances.items() if bal > 0.01]
+        col_s1, col_s2 = st.columns([1, 1.5])
+        with col_s1:
+            with st.container(border=True):
+                st.markdown("**Group Balances**")
+                for m, bal in balances.items():
+                    color = "green" if bal > 0.01 else ("red" if bal < -0.01 else "gray")
+                    st.write(f"• **{m}**: Paid `${paid_map.get(m, 0.0):,.2f}` (Net: :{color}[${bal:+,.2f}])")
 
-        trans = []
-        i, j = 0, 0
-        while i < len(debtors) and j < len(creditors):
-            d_name, d_amt = debtors[i]
-            c_name, c_amt = creditors[j]
-            settle_val = min(d_amt, c_amt)
-            trans.append((d_name, c_name, settle_val))
-            debtors[i][1] -= settle_val
-            creditors[j][1] -= settle_val
-            if debtors[i][1] <= 0.001: i += 1
-            if creditors[j][1] <= 0.001: j += 1
+        with col_s2:
+            with st.container(border=True):
+                st.markdown("**Transfer Recommendations**")
+                debtors = [[m, -bal] for m, bal in balances.items() if bal < -0.01]
+                creditors = [[m, bal] for m, bal in balances.items() if bal > 0.01]
 
-        if trans:
-            st.markdown("#### Direct Settle Actions")
-            for debtor, creditor, val in trans:
-                st.markdown(f"""
-                <div class="glass-card" style="border-left: 5px solid #10b981; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">👉 <b>{debtor}</b> pays <b>{creditor}</b></div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary);">Direct settlement via PayNow / FAST Transfer</div>
-                    </div>
-                    <div style="font-size: 1.6rem; font-weight: 800; color: #10b981;">${val:,.2f} SGD</div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.success("🎉 All accounts are balanced! No transfers required.")
+                trans = []
+                i, j = 0, 0
+                while i < len(debtors) and j < len(creditors):
+                    d_name, d_amt = debtors[i]
+                    c_name, c_amt = creditors[j]
+                    settle_val = min(d_amt, c_amt)
+                    trans.append((d_name, c_name, settle_val))
+                    debtors[i][1] -= settle_val
+                    creditors[j][1] -= settle_val
+                    if debtors[i][1] <= 0.001: i += 1
+                    if creditors[j][1] <= 0.001: j += 1
+
+                if trans:
+                    for deb, cred, val in trans:
+                        st.info(f"👉 **{deb}** transfers **${val:,.2f} SGD** to **{cred}**")
+                else:
+                    st.success("All accounts are balanced.")
     else:
         st.info("Log expenses and specify travelers to calculate splits.")
 
-# --- TAB 8: Dynamic Packing Checklist ---
-with tab_packing:
-    st.markdown("<h3 class='font-brand'>🎒 Smart Travel Packing Checklist</h3>", unsafe_allow_html=True)
+# --- TAB 4: Planner & Dynamic Packing ---
+with tab_planner:
+    col_p1, col_p2 = st.columns([1.2, 1])
 
-    if "packing_list" not in st.session_state:
-        st.session_state.packing_list = [
-            {"id": 1, "name": "Passport & Chinese Visa / Entry Card", "done": True, "cat": "Essentials"},
-            {"id": 2, "name": "Alipay / WeChat Pay Linked Card", "done": True, "cat": "Money"},
-            {"id": 3, "name": "eSIM / Roaming Data with VPN", "done": False, "cat": "Electronics"},
-            {"id": 4, "name": "Universal Power Adapter & GaN Charger", "done": False, "cat": "Electronics"},
-            {"id": 5, "name": "Comfortable Walking Shoes for City Walks", "done": False, "cat": "Clothing"},
-            {"id": 6, "name": "Compact Umbrella (Guangzhou Rain Gear)", "done": False, "cat": "Weather"}
-        ]
+    with col_p1:
+        st.markdown("#### Places to Visit / Wishlist")
+        with st.form("wish_form_saas", clear_on_submit=True):
+            w1, w2, w3 = st.columns([2, 1, 1])
+            with w1: w_title = st.text_input("Spot Name", placeholder="e.g., Canton Tower")
+            with w2: w_cost = st.number_input(f"Est. Cost ({foreign_curr})", min_value=0.0, step=10.0)
+            with w3: w_cat = st.selectbox("Category", ["Activities", "Dining", "Shopping", "Transport", "Other"])
+            if st.form_submit_button("Add to Wishlist", use_container_width=True) and w_title:
+                add_wishlist_item(w_title, w_cat, w_cost, "Guangzhou")
+                st.rerun()
 
-    with st.form("add_packing_item_form", clear_on_submit=True):
-        col_in1, col_in2, col_btn = st.columns([3, 1.5, 1])
-        with col_in1:
-            new_item_name = st.text_input("Gear Item Name", placeholder="e.g., Power Bank 20000mAh", label_visibility="collapsed")
-        with col_in2:
-            new_item_cat = st.selectbox("Category", ["Essentials", "Electronics", "Clothing", "Health", "Weather", "Other"], label_visibility="collapsed")
-        with col_btn:
-            submitted = st.form_submit_button("➕ Add Item", use_container_width=True)
+        wish_df = get_wishlist()
+        if not wish_df.empty:
+            for _, item in wish_df.iterrows():
+                with st.container(border=True):
+                    c_w1, c_w2 = st.columns([3, 1])
+                    with c_w1:
+                        st.markdown(f"**{item['title']}** &nbsp;`{item['category']}`")
+                        st.caption(f"Estimated: {item['estimated_cost']:,.0f} {foreign_curr} (~${(item['estimated_cost']/rate if rate>0 else 0):,.2f} SGD)")
+                    with c_w2:
+                        if st.button("Remove", key=f"del_w_{item['id']}"):
+                            delete_wishlist_item(item['id'])
+                            st.rerun()
+        else:
+            st.caption("No wishlist items added.")
 
-        if submitted and new_item_name.strip():
-            new_id = max([x["id"] for x in st.session_state.packing_list], default=0) + 1
-            st.session_state.packing_list.append({
-                "id": new_id,
-                "name": new_item_name.strip(),
-                "done": False,
-                "cat": new_item_cat
-            })
-            st.rerun()
+    with col_p2:
+        st.markdown("#### Packing Checklist")
+        if "packing_list" not in st.session_state:
+            st.session_state.packing_list = [
+                {"id": 1, "name": "Passport & Entry Permit", "done": True},
+                {"id": 2, "name": "Alipay / WeChat Pay Card Setup", "done": True},
+                {"id": 3, "name": "eSIM / Roaming Data", "done": False},
+                {"id": 4, "name": "Power Bank & Universal Adapter", "done": False},
+                {"id": 5, "name": "Rain Jacket / Umbrella", "done": False}
+            ]
 
-    total_p = len(st.session_state.packing_list)
-    done_p = sum(1 for x in st.session_state.packing_list if x["done"])
-    progress_val = (done_p / total_p) if total_p > 0 else 0.0
+        with st.form("add_pack_form", clear_on_submit=True):
+            p_in1, p_in2 = st.columns([3, 1])
+            with p_in1: new_pack = st.text_input("Item Name", placeholder="e.g., GaN Fast Charger", label_visibility="collapsed")
+            with p_in2: p_btn = st.form_submit_button("Add", use_container_width=True)
+            if p_btn and new_pack.strip():
+                new_id = max([x["id"] for x in st.session_state.packing_list], default=0) + 1
+                st.session_state.packing_list.append({"id": new_id, "name": new_pack.strip(), "done": False})
+                st.rerun()
 
-    st.progress(progress_val)
-    st.caption(f"Packed **{done_p} of {total_p}** items ({int(progress_val * 100)}%)")
+        total_p = len(st.session_state.packing_list)
+        done_p = sum(1 for x in st.session_state.packing_list if x["done"])
+        st.progress(done_p / total_p if total_p > 0 else 0)
+        st.caption(f"**{done_p}/{total_p}** items ready ({int((done_p/total_p*100) if total_p>0 else 0)}%)")
 
-    if total_p == 0:
-        st.info("No packing items yet. Add your first item above!")
-    else:
         for item in list(st.session_state.packing_list):
-            col_chk, col_cat, col_del = st.columns([3.5, 1.5, 0.8])
-            with col_chk:
-                checked = st.checkbox(
-                    item["name"],
-                    value=item["done"],
-                    key=f"pack_item_id_{item['id']}"
-                )
+            chk_col, del_col = st.columns([4, 1])
+            with chk_col:
+                checked = st.checkbox(item["name"], value=item["done"], key=f"p_id_{item['id']}")
                 if checked != item["done"]:
                     item["done"] = checked
                     st.rerun()
-            with col_cat:
-                st.markdown(f"<span class='chip-pill'>{item.get('cat', 'General')}</span>", unsafe_allow_html=True)
-            with col_del:
-                if st.button("🗑️", key=f"del_pack_{item['id']}", help="Delete item"):
+            with del_col:
+                if st.button("✖", key=f"d_p_{item['id']}"):
                     st.session_state.packing_list = [x for x in st.session_state.packing_list if x["id"] != item["id"]]
                     st.rerun()
+
+# --- TAB 5: FX Matrix & Category Breakdown ---
+with tab_fx:
+    c_fx1, c_fx2 = st.columns(2)
+    with c_fx1:
+        st.markdown("#### Live Exchange Rates (per 1 SGD)")
+        matrix_data = []
+        for curr_code in ["CNY", "JPY", "MYR", "THB", "KRW", "TWD", "USD", "EUR", "GBP", "AUD"]:
+            if curr_code in rates_dict:
+                matrix_data.append({
+                    "Currency": curr_code,
+                    "Rate": f"{rates_dict[curr_code]:,.2f}",
+                    "SGD 100 Equivalent": f"{(100 * rates_dict[curr_code]):,.2f} {curr_code}"
+                })
+        st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
+
+    with c_fx2:
+        st.markdown("#### Spending by Category")
+        if not df.empty:
+            cat_totals = df.groupby("category")["amount_home"].sum()
+            st.bar_chart(cat_totals, color="#2563eb")
+        else:
+            st.caption("No data to display category distributions.")
