@@ -8,7 +8,7 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
-# --- 1. Page Configuration & Editorial CSS System ---
+# --- 1. Page Configuration & Adaptive CSS System ---
 st.set_page_config(
     page_title="Travel Companion — Curate & Split",
     page_icon="🧭",
@@ -16,141 +16,184 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Design System: Sand Palette, Ink Typography, Ocean Blue Accents
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap');
 
-    /* Global Typography & Palette */
+    /* CSS Custom Properties for Light Theme (Default) */
+    :root {
+        --bg-card: #ffffff;
+        --bg-subtle: #f4f1ea;
+        --bg-pill: #f0f9ff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e8e2d4;
+        --accent-blue: #0284c7;
+        --accent-hover: #0369a1;
+        --card-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 16px -4px rgba(15, 23, 42, 0.06);
+        --card-shadow-hover: 0 4px 8px rgba(15, 23, 42, 0.06), 0 14px 24px -6px rgba(15, 23, 42, 0.1);
+        --banner-grad: linear-gradient(135deg, #0c4a6e 0%, #0284c7 60%, #38bdf8 100%);
+    }
+
+    /* CSS Custom Properties for Dark Theme */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-card: #1e293b;
+            --bg-subtle: #0f172a;
+            --bg-pill: #0c4a6e;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --accent-blue: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --card-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+            --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.4);
+            --banner-grad: linear-gradient(135deg, #0f172a 0%, #075985 60%, #0284c7 100%);
+        }
+    }
+
+    /* Streamlit Manual Dark Theme Override */
+    [data-theme="dark"], [data-testid="stAppViewContainer"]:has(.st-emotion-cache-1wmy9hl) {
+        --bg-card: #1e293b;
+        --bg-subtle: #0f172a;
+        --bg-pill: #0c4a6e;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+        --accent-blue: #38bdf8;
+        --accent-hover: #0ea5e9;
+        --banner-grad: linear-gradient(135deg, #0f172a 0%, #075985 60%, #0284c7 100%);
+    }
+
+    /* Global Typography */
     html, body, [class*="css"] {
         font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        color: #0f172a;
     }
 
-    .stApp {
-        background-color: #fafaf7;
-    }
-
-    /* Headings (Editorial Display Serif) */
+    /* Headings (Display Serif) */
     h1, h2, h3, .editorial-heading {
         font-family: 'Fraunces', Georgia, serif !important;
         font-weight: 600 !important;
         letter-spacing: -0.02em !important;
-        color: #0f172a;
+        color: var(--text-main) !important;
     }
 
     /* Hero Banner */
     .hero-container {
-        background: linear-gradient(135deg, #0c4a6e 0%, #0284c7 60%, #38bdf8 100%);
-        border-radius: 20px;
-        padding: 38px 40px;
-        color: white;
-        margin-bottom: 28px;
-        box-shadow: 0 10px 30px -10px rgba(2, 132, 199, 0.35);
+        background: var(--banner-grad);
+        border-radius: 18px;
+        padding: 32px 36px;
+        color: #ffffff;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 25px -10px rgba(2, 132, 199, 0.35);
     }
     .hero-container h1 {
         color: #ffffff !important;
-        font-size: 2.3rem !important;
-        margin-bottom: 8px;
+        font-size: 2.1rem !important;
+        margin-bottom: 6px;
     }
     .hero-container p {
         color: #e0f2fe;
-        font-size: 1.05rem;
+        font-size: 1rem;
         max-width: 600px;
         margin: 0;
     }
 
-    /* Card Systems */
+    /* Cards */
     .travel-card {
-        background: #ffffff;
-        border: 1px solid #e8e2d4;
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 16px -4px rgba(15, 23, 42, 0.06);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 14px;
+        color: var(--text-main);
+        box-shadow: var(--card-shadow);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .travel-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(15, 23, 42, 0.06), 0 14px 24px -6px rgba(15, 23, 42, 0.1);
+        box-shadow: var(--card-shadow-hover);
     }
 
-    /* Metric Badges */
+    /* Badges & Chips */
     .metric-pill {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: #f0f9ff;
-        color: #0369a1;
+        background: var(--bg-pill);
+        color: var(--accent-blue);
         font-weight: 600;
-        font-size: 0.8rem;
-        padding: 4px 12px;
+        font-size: 0.78rem;
+        padding: 3px 10px;
         border-radius: 9999px;
-        border: 1px solid #bae6fd;
+        border: 1px solid var(--border-color);
     }
     
     .category-chip {
         display: inline-block;
-        padding: 3px 10px;
+        padding: 3px 8px;
         border-radius: 6px;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        background: #f4f1ea;
-        color: #334155;
+        background: var(--bg-subtle);
+        color: var(--text-muted);
     }
 
-    /* Custom Streamlit Tabs Styling */
+    /* Tab Header Overhaul */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #f4f1ea;
-        padding: 6px;
-        border-radius: 12px;
-        border: 1px solid #e8e2d4;
+        gap: 6px;
+        background-color: var(--bg-subtle);
+        padding: 5px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
     }
     .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        border-radius: 8px;
+        height: 38px;
+        border-radius: 7px;
         font-weight: 500;
-        color: #64748b;
+        color: var(--text-muted);
         border: none !important;
         background-color: transparent;
-        padding: 0 18px;
+        padding: 0 16px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #ffffff !important;
-        color: #0284c7 !important;
+        background-color: var(--bg-card) !important;
+        color: var(--accent-blue) !important;
         font-weight: 600 !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
     }
 
-    /* Buttons */
+    /* Pill Buttons */
     .stButton > button {
         border-radius: 9999px;
-        background-color: #0284c7;
-        color: white;
+        background-color: var(--accent-blue);
+        color: #ffffff;
         font-weight: 600;
         border: none;
-        padding: 0.55rem 1.6rem;
+        padding: 0.5rem 1.4rem;
         transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
     }
     .stButton > button:hover {
-        background-color: #0369a1;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
-        color: white;
+        background-color: var(--accent-hover);
+        color: #ffffff;
     }
 
-    /* Sidebar Clean Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #f4f1ea;
-        border-right: 1px solid #e8e2d4;
+    /* Settlement Item */
+    .settle-row {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--accent-blue);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        color: var(--text-main);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Database Layer ---
+# --- 2. Database Operations ---
 DB_FILE = "trip_expenses.db"
 
 def init_db():
@@ -203,7 +246,7 @@ def delete_expense(exp_id):
     conn.commit()
     conn.close()
 
-# --- 3. Rates & Geocoding Service ---
+# --- 3. Live FX & Geocoding ---
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
     url = f"https://open.er-api.com/v6/latest/{base}"
@@ -211,7 +254,7 @@ def fetch_live_rates(base="SGD"):
         res = requests.get(url, timeout=5)
         data = res.json()
         if data.get("result") == "success":
-            return data.get("rates", {}), "Live Online"
+            return data.get("rates", {}), "🟢 Live Online"
     except Exception:
         pass
     fallback = {
@@ -219,14 +262,14 @@ def fetch_live_rates(base="SGD"):
         "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60,
         "VND": 19000.0, "IDR": 12000.0, "AUD": 1.15
     }
-    return fallback, "Offline Fallback"
+    return fallback, "🟠 Offline Fallback"
 
 @st.cache_data(show_spinner=False)
 def geocode_place(place_name):
     if not place_name or place_name.strip() == "":
         return None, None
     try:
-        geolocator = Nominatim(user_agent="travel_companion_editorial_app")
+        geolocator = Nominatim(user_agent="travel_companion_editorial_app_v2")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         loc = geocode(place_name)
         if loc:
@@ -237,18 +280,18 @@ def geocode_place(place_name):
 
 init_db()
 
-# --- 4. Sidebar Controls ---
+# --- 4. Sidebar ---
 with st.sidebar:
     st.markdown("<h3 class='editorial-heading'>Trip Settings</h3>", unsafe_allow_html=True)
     rates_dict, status_msg = fetch_live_rates("SGD")
-    st.caption(f"FX Rates: **{status_msg}**")
+    st.caption(f"FX Status: {status_msg}")
 
     popular_currencies = ["JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
     selected_foreign = st.selectbox("Destination Currency", popular_currencies, index=0)
     foreign_curr = st.text_input("Currency Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
 
     default_rate = float(rates_dict.get(foreign_curr, 1.0))
-    rate = st.number_input(f"Rate (1 SGD = X {foreign_curr})", value=default_rate, format="%.4f")
+    rate = st.number_input(f"Exchange Rate (1 SGD = X {foreign_curr})", value=default_rate, format="%.4f")
 
     st.markdown("---")
     st.markdown("<h4 class='editorial-heading'>Travelers</h4>", unsafe_allow_html=True)
@@ -259,18 +302,19 @@ with st.sidebar:
     st.markdown("<h4 class='editorial-heading'>Quick Converter</h4>", unsafe_allow_html=True)
     conv_val = st.number_input(f"Amount in {foreign_curr}", value=1000.0, step=100.0)
     converted_sgd = conv_val / rate if rate > 0 else 0.0
+    
     st.markdown(f"""
-    <div style="background: white; border: 1px solid #e8e2d4; border-radius: 10px; padding: 12px; text-align: center;">
-        <span style="font-size: 0.85rem; color: #64748b;">Equivalent Home Cost</span>
-        <div style="font-size: 1.3rem; font-weight: 700; color: #0284c7;">${converted_sgd:,.2f} SGD</div>
+    <div class="travel-card" style="text-align: center; padding: 12px; margin-top: 8px;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Equivalent SGD</span>
+        <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue);">${converted_sgd:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Main Hero Banner ---
+# --- 5. Hero Banner ---
 st.markdown("""
 <div class="hero-container">
     <h1>Travel Companion</h1>
-    <p>Plan itineraries, trace your route with interactive maps, and balance group expenses effortlessly.</p>
+    <p>Plan routes, track multi-currency budgets, and settle group expenses seamlessly.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -281,42 +325,46 @@ tab_overview, tab_log, tab_map, tab_settle = st.tabs([
     "🧭 Overview & Feed",
     "➕ Log Expense",
     "🗺️ Interactive Route",
-    "🤝 Balance & Settle"
+    "🤝 Settle Up"
 ])
 
-# --- TAB 1: Overview & Editorial Feed ---
+# --- TAB 1: Overview & Feed ---
 with tab_overview:
     if not df.empty:
         total_sgd = df["amount_home"].sum()
         avg_exp = total_sgd / len(df) if len(df) > 0 else 0.0
 
-        # KPI Metrics Row
         k1, k2, k3 = st.columns(3)
         with k1:
             st.markdown(f"""
             <div class="travel-card">
                 <span class="category-chip">Total Expenditure</span>
-                <div style="font-size: 1.8rem; font-weight: 700; color: #0f172a; margin-top: 6px;">${total_sgd:,.2f} <span style="font-size: 0.9rem; color: #64748b;">SGD</span></div>
+                <div style="font-size: 1.7rem; font-weight: 700; margin-top: 4px; color: var(--text-main);">
+                    ${total_sgd:,.2f} <span style="font-size: 0.85rem; color: var(--text-muted);">SGD</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
         with k2:
             st.markdown(f"""
             <div class="travel-card">
-                <span class="category-chip">Average per Entry</span>
-                <div style="font-size: 1.8rem; font-weight: 700; color: #0284c7; margin-top: 6px;">${avg_exp:,.2f} <span style="font-size: 0.9rem; color: #64748b;">SGD</span></div>
+                <span class="category-chip">Average Spend</span>
+                <div style="font-size: 1.7rem; font-weight: 700; margin-top: 4px; color: var(--accent-blue);">
+                    ${avg_exp:,.2f} <span style="font-size: 0.85rem; color: var(--text-muted);">SGD</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
         with k3:
             st.markdown(f"""
             <div class="travel-card">
-                <span class="category-chip">Activity Count</span>
-                <div style="font-size: 1.8rem; font-weight: 700; color: #0f172a; margin-top: 6px;">{len(df)} <span style="font-size: 0.9rem; color: #64748b;">Items Logged</span></div>
+                <span class="category-chip">Logged Entries</span>
+                <div style="font-size: 1.7rem; font-weight: 700; margin-top: 4px; color: var(--text-main);">
+                    {len(df)} <span style="font-size: 0.85rem; color: var(--text-muted);">Items</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("<h3 class='editorial-heading' style='margin-top: 10px;'>Trip Ledger</h3>", unsafe_allow_html=True)
 
-        # Editorial Card Feed
         for _, row in df.iterrows():
             loc_badge = f"<span class='metric-pill'>📍 {row['location_name']}</span>" if row['location_name'] else ""
             st.markdown(f"""
@@ -324,52 +372,54 @@ with tab_overview:
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
                         <span class="category-chip">{row['category']}</span>
-                        <h4 style="margin: 6px 0 2px 0; font-size: 1.15rem; color: #0f172a;">{row['description']}</h4>
-                        <div style="color: #64748b; font-size: 0.85rem;">
+                        <div style="font-family: 'Fraunces', serif; font-size: 1.15rem; font-weight: 600; margin: 6px 0 2px 0; color: var(--text-main);">
+                            {row['description']}
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">
                             🗓️ {row['expense_date']} &nbsp;•&nbsp; Paid by <b>{row['paid_by']}</b> &nbsp; {loc_badge}
                         </div>
                     </div>
                     <div style="text-align: right;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: #0284c7;">${row['amount_home']:,.2f} SGD</div>
-                        <div style="font-size: 0.8rem; color: #64748b;">{row['amount_foreign']:,.0f} {row['currency']}</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue);">${row['amount_home']:,.2f} SGD</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">{row['amount_foreign']:,.0f} {row['currency']}</div>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-        with st.expander("🗑️ Remove an Expense Entry"):
+        with st.expander("🗑️ Delete an Entry"):
             del_id = st.selectbox(
-                "Select transaction to remove",
+                "Select entry to remove",
                 df["id"].tolist(),
                 format_func=lambda x: f"ID {x}: {df[df['id']==x]['description'].values[0]} (${df[df['id']==x]['amount_home'].values[0]:.2f} SGD)"
             )
-            if st.button("Confirm Deletion"):
+            if st.button("Confirm Delete", type="primary"):
                 delete_expense(del_id)
                 st.rerun()
     else:
-        st.info("No trip records found. Log your first expense below!")
+        st.info("No trip records found. Log your first expense in the 'Log Expense' tab!")
 
 # --- TAB 2: Log Expense ---
 with tab_log:
     st.markdown("<h3 class='editorial-heading'>Record a Transaction</h3>", unsafe_allow_html=True)
     with st.container():
-        with st.form("modern_expense_form", clear_on_submit=True):
+        with st.form("adaptive_expense_form", clear_on_submit=True):
             col_a, col_b = st.columns(2)
             with col_a:
-                desc = st.text_input("Item Description*", placeholder="e.g. Kyoto Traditional Tea Ceremony")
+                desc = st.text_input("Item Description*", placeholder="e.g. Shibuya Izakaya Dinner")
                 amt = st.number_input(f"Foreign Price ({foreign_curr})*", min_value=0.0, step=10.0)
                 category = st.selectbox("Category", ["Food & Dining", "Transport", "Accommodation", "Activities", "Shopping", "Other"])
-                loc = st.text_input("Location / Venue", placeholder="e.g. Gion, Kyoto")
+                loc = st.text_input("Location / Venue (Optional)", placeholder="e.g. Shibuya, Tokyo")
 
             with col_b:
                 payer = st.selectbox("Paid By", members if members else ["Me"])
-                exp_date = st.date_input("Date of Expense", value=date.today())
+                exp_date = st.date_input("Date", value=date.today())
                 live_calc = amt / rate if rate > 0 else 0.0
                 st.markdown(f"""
-                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 18px; margin-top: 24px;">
-                    <div style="font-size: 0.85rem; color: #0369a1; font-weight: 600;">ESTIMATED CONVERSION</div>
-                    <div style="font-size: 1.6rem; font-weight: 700; color: #0284c7;">${live_calc:,.2f} SGD</div>
-                    <div style="font-size: 0.8rem; color: #64748b;">At rate: 1 SGD = {rate} {foreign_curr}</div>
+                <div class="travel-card" style="margin-top: 24px; padding: 16px;">
+                    <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">ESTIMATED HOME COST</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-blue);">${live_calc:,.2f} SGD</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">Rate: 1 SGD = {rate} {foreign_curr}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -380,14 +430,14 @@ with tab_log:
                 if desc and amt > 0:
                     lat, lon = geocode_place(loc)
                     log_expense(desc, amt, foreign_curr, rate, payer, category, str(exp_date), loc, lat, lon)
-                    st.toast(f"Logged: {desc}", icon="✨")
+                    st.toast(f"Saved: {desc}", icon="✨")
                     st.rerun()
                 else:
-                    st.error("Please enter a description and a valid amount.")
+                    st.error("Please enter a description and valid amount.")
 
 # --- TAB 3: Map View ---
 with tab_map:
-    st.markdown("<h3 class='editorial-heading'>Route & Place Markers</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 class='editorial-heading'>Route & Locations</h3>", unsafe_allow_html=True)
     map_df = df.dropna(subset=["latitude", "longitude"])
 
     if not map_df.empty:
@@ -413,9 +463,9 @@ with tab_map:
 
         st_folium(m, width="100%", height=480)
     else:
-        st.info("Include location names when recording expenses to place pins on your route map.")
+        st.info("Include place or city names when saving expenses to plot pins on this map.")
 
-# --- TAB 4: Settlement & Splitting ---
+# --- TAB 4: Settlement ---
 with tab_settle:
     st.markdown("<h3 class='editorial-heading'>Group Balances & Direct Settlement</h3>", unsafe_allow_html=True)
     if not df.empty and members:
@@ -426,15 +476,15 @@ with tab_settle:
         with s1:
             st.markdown(f"""
             <div class="travel-card">
-                <span class="category-chip">Group Spend</span>
-                <div style="font-size: 1.7rem; font-weight: 700; color: #0f172a; margin-top: 4px;">${total_group:,.2f} SGD</div>
+                <span class="category-chip">Total Group Spend</span>
+                <div style="font-size: 1.6rem; font-weight: 700; margin-top: 4px; color: var(--text-main);">${total_group:,.2f} SGD</div>
             </div>
             """, unsafe_allow_html=True)
         with s2:
             st.markdown(f"""
             <div class="travel-card">
-                <span class="category-chip">Per Person Share</span>
-                <div style="font-size: 1.7rem; font-weight: 700; color: #0284c7; margin-top: 4px;">${fair_share:,.2f} SGD</div>
+                <span class="category-chip">Fair Share Each</span>
+                <div style="font-size: 1.6rem; font-weight: 700; margin-top: 4px; color: var(--accent-blue);">${fair_share:,.2f} SGD</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -444,21 +494,20 @@ with tab_settle:
         st.markdown("<h4 class='editorial-heading' style='margin-top: 15px;'>Member Net Standing</h4>", unsafe_allow_html=True)
         col_list = st.columns(len(members))
         for idx, (member_name, balance) in enumerate(balances.items()):
-            status_color = "#0284c7" if balance > 0.01 else ("#e11d48" if balance < -0.01 else "#64748b")
+            status_color = "var(--accent-blue)" if balance > 0.01 else ("#f43f5e" if balance < -0.01 else "var(--text-muted)")
             status_label = "Gets Back" if balance > 0.01 else ("Owes" if balance < -0.01 else "Settled")
             with col_list[idx % len(col_list)]:
                 st.markdown(f"""
                 <div class="travel-card" style="text-align: center;">
-                    <div style="font-weight: 700; font-size: 1.05rem;">{member_name}</div>
-                    <div style="font-size: 0.8rem; color: #64748b;">Paid: ${paid_map.get(member_name, 0.0):,.2f}</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: {status_color}; margin-top: 8px;">
+                    <div style="font-weight: 700; font-size: 1rem; color: var(--text-main);">{member_name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">Paid: ${paid_map.get(member_name, 0.0):,.2f}</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: {status_color}; margin-top: 6px;">
                         {balance:+,.2f} SGD
                     </div>
                     <span class="category-chip" style="margin-top: 6px;">{status_label}</span>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Debt Resolution Engine
         st.markdown("<h4 class='editorial-heading' style='margin-top: 20px;'>Settlement Transactions</h4>", unsafe_allow_html=True)
         debtors = [[m, -bal] for m, bal in balances.items() if bal < -0.01]
         creditors = [[m, bal] for m, bal in balances.items() if bal > 0.01]
@@ -481,11 +530,11 @@ with tab_settle:
         if transactions:
             for deb, cred, amt_val in transactions:
                 st.markdown(f"""
-                <div style="background: white; border-left: 4px solid #0284c7; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <b>{deb}</b> sends <b>${amt_val:,.2f} SGD</b> to <b>{cred}</b>
+                <div class="settle-row">
+                    👉 <b>{deb}</b> sends <b>${amt_val:,.2f} SGD</b> to <b>{cred}</b>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("All accounts are balanced!")
+            st.info("All accounts are completely balanced!")
     else:
         st.info("Log expenses and specify travelers to calculate splits.")
