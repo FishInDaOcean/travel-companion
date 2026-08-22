@@ -684,30 +684,63 @@ with tab_settle:
 with tab_packing:
     st.markdown("<h3 class='font-brand'>🎒 Smart Travel Packing Checklist</h3>", unsafe_allow_html=True)
 
-    if "custom_packing" not in st.session_state:
-        st.session_state.custom_packing = [
-            {"name": "Passport & Flight Tickets", "done": True},
-            {"name": "Universal Adapter & 65W GaN Charger", "done": False},
-            {"name": "Multi-Currency Debit Card (YouTrip / Wise)", "done": True},
-            {"name": "Noise Cancelling Earbuds", "done": False},
-            {"name": "Emergency Medication / Band-Aids", "done": False},
-            {"name": "Foldable Rain Jacket / Umbrella", "done": False}
+    # 1. Initialize with unique IDs and categories
+    if "packing_list" not in st.session_state:
+        st.session_state.packing_list = [
+            {"id": 1, "name": "Passport & Flight Tickets", "done": True, "cat": "Essentials"},
+            {"id": 2, "name": "Universal Adapter & 65W GaN Charger", "done": False, "cat": "Electronics"},
+            {"id": 3, "name": "Multi-Currency Debit Card (YouTrip / Wise)", "done": True, "cat": "Money"},
+            {"id": 4, "name": "Noise Cancelling Earbuds", "done": False, "cat": "Electronics"},
+            {"id": 5, "name": "Emergency Medication / Band-Aids", "done": False, "cat": "Health"},
+            {"id": 6, "name": "Foldable Rain Jacket / Umbrella", "done": False, "cat": "Weather"}
         ]
 
-    # Add new item input
-    pack_c1, pack_c2 = st.columns([3, 1])
-    with pack_c1:
-        new_item = st.text_input("Add Custom Gear Item", placeholder="e.g. GoPro Hero 12 + Extra Batteries", label_visibility="collapsed")
-    with pack_c2:
-        if st.button("➕ Add Item", use_container_width=True) and new_item:
-            st.session_state.custom_packing.append({"name": new_item, "done": False})
+    # 2. Form to add items (clears input on submit)
+    with st.form("add_packing_item_form", clear_on_submit=True):
+        col_in1, col_in2, col_btn = st.columns([3, 1.5, 1])
+        with col_in1:
+            new_item_name = st.text_input("Gear Item Name", placeholder="e.g., GoPro Hero 12 + Extra Batteries", label_visibility="collapsed")
+        with col_in2:
+            new_item_cat = st.selectbox("Category", ["Essentials", "Electronics", "Clothing", "Health", "Weather", "Other"], label_visibility="collapsed")
+        with col_btn:
+            submitted = st.form_submit_button("➕ Add Item", use_container_width=True)
+
+        if submitted and new_item_name.strip():
+            new_id = max([x["id"] for x in st.session_state.packing_list], default=0) + 1
+            st.session_state.packing_list.append({
+                "id": new_id,
+                "name": new_item_name.strip(),
+                "done": False,
+                "cat": new_item_cat
+            })
             st.rerun()
 
-    total_p = len(st.session_state.custom_packing)
-    done_p = sum(1 for x in st.session_state.custom_packing if x["done"])
-    st.progress(done_p / total_p if total_p > 0 else 0)
-    st.caption(f"Packed **{done_p} of {total_p}** items ({done_p/total_p*100:.0f}%)")
+    # 3. Real-time progress bar calculation
+    total_p = len(st.session_state.packing_list)
+    done_p = sum(1 for x in st.session_state.packing_list if x["done"])
+    progress_val = (done_p / total_p) if total_p > 0 else 0.0
 
-    for idx, item in enumerate(st.session_state.custom_packing):
-        checked = st.checkbox(item["name"], value=item["done"], key=f"pack_check_{idx}")
-        st.session_state.custom_packing[idx]["done"] = checked
+    st.progress(progress_val)
+    st.caption(f"Packed **{done_p} of {total_p}** items ({int(progress_val * 100)}%)")
+
+    # 4. Render checklist with unique keys and delete buttons
+    if total_p == 0:
+        st.info("No packing items yet. Add your first item above!")
+    else:
+        for item in list(st.session_state.packing_list):
+            col_chk, col_cat, col_del = st.columns([3.5, 1.5, 0.8])
+            with col_chk:
+                checked = st.checkbox(
+                    item["name"],
+                    value=item["done"],
+                    key=f"pack_item_id_{item['id']}"
+                )
+                if checked != item["done"]:
+                    item["done"] = checked
+                    st.rerun()
+            with col_cat:
+                st.markdown(f"<span class='chip-pill'>{item.get('cat', 'General')}</span>", unsafe_allow_html=True)
+            with col_del:
+                if st.button("🗑️", key=f"del_pack_{item['id']}", help="Delete item"):
+                    st.session_state.packing_list = [x for x in st.session_state.packing_list if x["id"] != item["id"]]
+                    st.rerun()
