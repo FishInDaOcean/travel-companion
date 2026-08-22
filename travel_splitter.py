@@ -9,7 +9,7 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import io
 
-# --- 1. Page Configuration & Ultra-Modern Cyber-Glass Theme ---
+# --- 1. Page Configuration & Adaptive UI ---
 st.set_page_config(
     page_title="Travel Companion OS",
     page_icon="🧭",
@@ -67,7 +67,7 @@ st.markdown("""
         letter-spacing: -0.02em;
     }
 
-    /* Glassmorphism Cards */
+    /* Cards */
     .glass-card {
         background: var(--card-bg);
         border: 1px solid var(--border-glass);
@@ -76,21 +76,19 @@ st.markdown("""
         margin-bottom: 16px;
         box-shadow: var(--card-shadow);
         backdrop-filter: blur(16px);
-        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .glass-card:hover {
-        transform: translateY(-3px);
+        transform: translateY(-2px);
     }
 
-    /* Weather Radar Glass Widget */
+    /* Radar Widget */
     .radar-card {
         background: var(--accent-gradient);
         border-radius: 20px;
         padding: 24px;
         color: white;
         box-shadow: 0 15px 35px -5px rgba(2, 132, 199, 0.45);
-        position: relative;
-        overflow: hidden;
     }
 
     .radar-badge {
@@ -152,19 +150,17 @@ st.markdown("""
     }
     .stButton > button:hover {
         box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
-        transform: translateY(-1px);
         color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Database Layer with Extended Metadata & Wishlist ---
+# --- 2. Database Setup & Persistence ---
 DB_FILE = "trip_expenses.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # Expenses Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,7 +178,6 @@ def init_db():
             trip_day INTEGER DEFAULT 1
         )
     """)
-    # Wishlist & Bucket List Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS wishlist (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,7 +235,7 @@ def delete_wishlist_item(item_id):
     conn.commit()
     conn.close()
 
-# --- 3. Live FX, Geocoding & Open-Meteo Weather APIs ---
+# --- 3. Live FX, Geocoding & Open-Meteo Weather Services ---
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
     url = f"https://open.er-api.com/v6/latest/{base}"
@@ -252,7 +247,7 @@ def fetch_live_rates(base="SGD"):
     except Exception:
         pass
     fallback = {
-        "JPY": 115.0, "MYR": 3.48, "THB": 26.8, "CNY": 5.38, "TWD": 24.2,
+        "CNY": 5.38, "JPY": 115.0, "MYR": 3.48, "THB": 26.8, "TWD": 24.2,
         "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60, "VND": 19000.0,
         "IDR": 12000.0, "AUD": 1.15
     }
@@ -263,7 +258,7 @@ def geocode_place(place_name):
     if not place_name or place_name.strip() == "":
         return None, None
     try:
-        geolocator = Nominatim(user_agent="travel_companion_os_v4")
+        geolocator = Nominatim(user_agent="travel_companion_os_gz")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         loc = geocode(place_name)
         if loc:
@@ -283,7 +278,6 @@ def get_live_weather(lat, lon):
         temp = current.get("temperature_2m", 0)
         humidity = current.get("relative_humidity_2m", 0)
         w_code = current.get("weather_code", 0)
-        rain = current.get("precipitation", 0)
         
         condition = "☀️ Sunny / Clear"
         tip = "Great weather for outdoor exploration!"
@@ -292,13 +286,13 @@ def get_live_weather(lat, lon):
             tip = "Pleasant conditions for walking tours."
         elif w_code in [45, 48]: 
             condition = "🌫️ Foggy"
-            tip = "Low visibility at scenic observation towers."
+            tip = "Low visibility at Canton Tower observation deck."
         elif w_code in [51, 61, 80]: 
             condition = "🌧️ Light Showers"
             tip = "Carry a compact umbrella or rain shell."
         elif w_code >= 63: 
             condition = "⛈️ Heavy Rain / Thunderstorm"
-            tip = "Ideal time to explore museums, cafes, or shopping centers."
+            tip = "Explore tea houses, malls, or museums."
         
         if temp < 10: tip += " ❄️ Pack warm layers!"
         elif temp > 32: tip += " 🥤 Stay hydrated & seek shade!"
@@ -308,7 +302,6 @@ def get_live_weather(lat, lon):
             "humidity": humidity,
             "condition": condition,
             "wind": current.get("wind_speed_10m", 0),
-            "rain": rain,
             "tip": tip
         }
     except Exception:
@@ -316,17 +309,18 @@ def get_live_weather(lat, lon):
 
 init_db()
 
-# --- 4. Sidebar Controls & Global Configuration ---
+# --- 4. Sidebar Controls (Default: CNY / SGD Base) ---
 with st.sidebar:
     st.markdown("<h2 class='font-brand'>🧭 Trip Control Deck</h2>", unsafe_allow_html=True)
     rates_dict, status_msg = fetch_live_rates("SGD")
     st.caption(f"FX Feeds: **{status_msg}**")
 
-    popular_currencies = ["JPY", "MYR", "THB", "CNY", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
+    # CNY is now the first choice in the list
+    popular_currencies = ["CNY", "JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
     selected_foreign = st.selectbox("Destination Currency", popular_currencies, index=0)
     foreign_curr = st.text_input("Custom Currency Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
 
-    default_rate = float(rates_dict.get(foreign_curr, 1.0))
+    default_rate = float(rates_dict.get(foreign_curr, 5.38))
     rate = st.number_input(f"Exchange Rate (1 SGD = X {foreign_curr})", value=default_rate, format="%.4f")
 
     st.markdown("---")
@@ -342,7 +336,7 @@ with st.sidebar:
 df = get_expenses()
 total_spent_sgd = df["amount_home"].sum() if not df.empty else 0.0
 
-# --- 5. Interactive Destination Radar & Hero ---
+# --- 5. Interactive Radar (Default: Guangzhou, China) & Hero ---
 col_hero, col_radar = st.columns([1.8, 1.2])
 
 with col_hero:
@@ -357,10 +351,9 @@ with col_hero:
     """, unsafe_allow_html=True)
 
 with col_radar:
-    # Interactive Search for Weather Radar
     radar_col1, radar_col2 = st.columns([2, 1])
     with radar_col1:
-        custom_radar_city = st.text_input("📍 Radar Target City", value="Tokyo", label_visibility="collapsed")
+        custom_radar_city = st.text_input("📍 Radar Target City", value="Guangzhou, China", label_visibility="collapsed")
     with radar_col2:
         if st.button("🛰️ Scan Radar", use_container_width=True):
             st.session_state.radar_city = custom_radar_city
@@ -368,8 +361,9 @@ with col_radar:
     active_city = st.session_state.get("radar_city", custom_radar_city)
     r_lat, r_lon = geocode_place(active_city)
     
+    # Hard fallback to Guangzhou, China if geocoding fails
     if not r_lat:
-        r_lat, r_lon, active_city = 35.6762, 139.6503, "Tokyo (Default)"
+        r_lat, r_lon, active_city = 23.1291, 113.2644, "Guangzhou, China"
 
     weather = get_live_weather(r_lat, r_lon)
     if weather:
@@ -389,7 +383,7 @@ with col_radar:
         </div>
         """, unsafe_allow_html=True)
 
-# --- 6. Main Feature Navigation Tabs ---
+# --- 6. Navigation Tabs ---
 tab_timeline, tab_map, tab_wishlist, tab_fx, tab_analytics, tab_log, tab_settle, tab_packing = st.tabs([
     "🗓️ Itinerary Feed",
     "🗺️ Interactive Route",
@@ -401,7 +395,7 @@ tab_timeline, tab_map, tab_wishlist, tab_fx, tab_analytics, tab_log, tab_settle,
     "🎒 Smart Packing"
 ])
 
-# --- TAB 1: Visual Itinerary Timeline Feed ---
+# --- TAB 1: Itinerary Timeline Feed ---
 with tab_timeline:
     st.markdown("<h3 class='font-brand'>🗓️ Day-by-Day Timeline</h3>", unsafe_allow_html=True)
     if not df.empty:
@@ -439,74 +433,97 @@ with tab_timeline:
     else:
         st.info("No timeline items logged yet. Record your stops in the 'Log Expense' tab!")
 
-# --- TAB 2: Filterable Map View ---
+# --- TAB 2: Filterable Route Map (Default: Guangzhou Center) ---
 with tab_map:
     st.markdown("<h3 class='font-brand'>🗺️ Geographic Route & Pin Filters</h3>", unsafe_allow_html=True)
+
     map_data = df.dropna(subset=["latitude", "longitude"])
-    
-    if not map_data.empty:
-        c_filter1, c_filter2 = st.columns(2)
-        with c_filter1:
-            all_categories = ["All Categories"] + list(map_data["category"].unique())
-            selected_cat = st.selectbox("Filter Map by Category", all_categories)
-        with c_filter2:
-            show_routes = st.checkbox("Draw Flight / Walking Routes", value=True)
+    missing_coords = len(df) - len(map_data)
 
-        filtered_map = map_data if selected_cat == "All Categories" else map_data[map_data["category"] == selected_cat]
+    if missing_coords > 0 and not df.empty:
+        with st.expander(f"⚠️ {missing_coords} expense(s) missing GPS coordinates"):
+            st.caption("Click to attempt auto-geocoding for transactions that have a location name.")
+            if st.button("🔄 Auto-Geocode Missing Entries"):
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                for _, row in df[df["latitude"].isna()].iterrows():
+                    if row["location_name"]:
+                        lat, lon = geocode_place(row["location_name"])
+                        if lat and lon:
+                            c.execute("UPDATE expenses SET latitude = ?, longitude = ? WHERE id = ?", (lat, lon, row["id"]))
+                conn.commit()
+                conn.close()
+                st.toast("Coordinates synced!", icon="✅")
+                st.rerun()
 
-        if not filtered_map.empty:
-            center_lat, center_lon = filtered_map["latitude"].mean(), filtered_map["longitude"].mean()
-            m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="CartoDB positron")
+    c_filter1, c_filter2 = st.columns([2, 1])
+    with c_filter1:
+        categories = ["All Categories"] + (list(map_data["category"].unique()) if not map_data.empty else [])
+        selected_cat = st.selectbox("Filter by Category", categories)
+    with c_filter2:
+        show_routes = st.checkbox("Draw Route Lines", value=True)
 
-            points = []
-            for _, row in filtered_map.iterrows():
-                points.append([row["latitude"], row["longitude"]])
-                popup_html = f"""
-                <div style='font-family: sans-serif; min-width: 180px;'>
-                    <b style='color: #0284c7; font-size: 14px;'>{row['description']}</b><br>
-                    <b>Cost:</b> ${row['amount_home']:.2f} SGD<br>
-                    <b>Day:</b> Day {row['trip_day']}<br>
-                    <b>Paid by:</b> {row['paid_by']}
-                </div>
-                """
-                folium.Marker(
-                    [row["latitude"], row["longitude"]],
-                    popup=folium.Popup(popup_html, max_width=250),
-                    tooltip=f"Day {row['trip_day']}: {row['description']} (${row['amount_home']:.2f} SGD)",
-                    icon=folium.Icon(color="info", icon="map-pin", prefix="fa")
-                ).add_to(m)
+    filtered_map = map_data if selected_cat == "All Categories" else map_data[map_data["category"] == selected_cat]
 
-            if show_routes and len(points) > 1:
-                folium.PolyLine(points, color="#0284c7", weight=3.5, opacity=0.8, dash_array="6, 10").add_to(m)
-
-            st_folium(m, width="100%", height=520)
-        else:
-            st.warning("No pins match the selected category filter.")
+    # Center logic: Filtered pins -> Active Radar City -> Guangzhou Coordinates
+    if not filtered_map.empty:
+        center_lat = float(filtered_map["latitude"].mean())
+        center_lon = float(filtered_map["longitude"].mean())
+        zoom = 12
+    elif 'r_lat' in locals() and r_lat:
+        center_lat, center_lon, zoom = float(r_lat), float(r_lon), 11
     else:
-        st.info("Include location/venue names when logging expenses to plot your interactive route pins.")
+        center_lat, center_lon, zoom = 23.1291, 113.2644, 11
 
-# --- TAB 3: Wishlist & Bucket List Scratchpad ---
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=zoom, tiles="CartoDB positron")
+
+    points = []
+    if not filtered_map.empty:
+        for _, row in filtered_map.iterrows():
+            points.append([float(row["latitude"]), float(row["longitude"])])
+            popup_html = f"""
+            <div style='font-family: sans-serif; min-width: 170px;'>
+                <b style='color: #0284c7; font-size: 13px;'>{row['description']}</b><br>
+                <b>Cost:</b> ${row['amount_home']:.2f} SGD<br>
+                <b>Day {row['trip_day']}</b> • Paid by {row['paid_by']}
+            </div>
+            """
+            folium.Marker(
+                [float(row["latitude"]), float(row["longitude"])],
+                popup=folium.Popup(popup_html, max_width=250),
+                tooltip=f"Day {row['trip_day']}: {row['description']} (${row['amount_home']:.2f} SGD)",
+                icon=folium.Icon(color="info", icon="map-pin", prefix="fa")
+            ).add_to(m)
+
+        if show_routes and len(points) > 1:
+            folium.PolyLine(points, color="#0284c7", weight=3, opacity=0.8, dash_array="6, 10").add_to(m)
+
+    st_folium(m, height=520, use_container_width=True)
+
+    if filtered_map.empty:
+        st.info("💡 To plot pins on this map, include a recognizable landmark or city (e.g., 'Canton Tower, Guangzhou') when saving an expense.")
+
+# --- TAB 3: Wishlist & Bucket List ---
 with tab_wishlist:
     st.markdown("<h3 class='font-brand'>✨ Places to Visit & Bucket List</h3>", unsafe_allow_html=True)
-    st.caption("Plan bucket-list spots before you go. Convert them directly into logged expenses with one click!")
+    st.caption("Plan bucket-list spots before you go. Convert them directly into logged expenses later!")
 
-    with st.container():
-        with st.form("wishlist_form", clear_on_submit=True):
-            w_c1, w_c2, w_c3, w_c4 = st.columns([2, 1, 1, 1])
-            with w_c1:
-                w_title = st.text_input("Place / Activity Wishlist", placeholder="e.g. Universal Studios Express Pass")
-            with w_c2:
-                w_cat = st.selectbox("Category", ["Activities", "Food & Dining", "Shopping", "Transport", "Other"])
-            with w_c3:
-                w_cost = st.number_input(f"Est. Cost ({foreign_curr})", min_value=0.0, step=10.0)
-            with w_c4:
-                w_loc = st.text_input("City / Venue", placeholder="e.g. Osaka")
-            
-            w_submit = st.form_submit_button("➕ Add to Bucket List", use_container_width=True)
-            if w_submit and w_title:
-                add_wishlist_item(w_title, w_cat, w_cost, w_loc)
-                st.toast(f"Added to wishlist: {w_title}", icon="🎯")
-                st.rerun()
+    with st.form("wishlist_form", clear_on_submit=True):
+        w_c1, w_c2, w_c3, w_c4 = st.columns([2, 1, 1, 1])
+        with w_c1:
+            w_title = st.text_input("Wishlist Item / Spot", placeholder="e.g., Canton Tower Observation Deck")
+        with w_c2:
+            w_cat = st.selectbox("Category", ["Activities", "Food & Dining", "Shopping", "Transport", "Other"])
+        with w_c3:
+            w_cost = st.number_input(f"Est. Cost ({foreign_curr})", min_value=0.0, step=10.0)
+        with w_c4:
+            w_loc = st.text_input("Location", placeholder="e.g., Guangzhou")
+        
+        w_submit = st.form_submit_button("➕ Add to Bucket List", use_container_width=True)
+        if w_submit and w_title:
+            add_wishlist_item(w_title, w_cat, w_cost, w_loc)
+            st.toast(f"Added: {w_title}", icon="🎯")
+            st.rerun()
 
     wish_df = get_wishlist()
     if not wish_df.empty:
@@ -533,7 +550,7 @@ with tab_wishlist:
                     delete_wishlist_item(item['id'])
                     st.rerun()
     else:
-        st.info("Your wishlist is currently empty. Brainstorm spots above!")
+        st.info("Your wishlist is empty. Add ideas above!")
 
 # --- TAB 4: Live FX Matrix & Interactive Simulator ---
 with tab_fx:
@@ -543,16 +560,16 @@ with tab_fx:
     with sim_col1:
         st.markdown(f"""
         <div class="glass-card">
-            <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">Interactive FX Slider</h4>
-            <span style="font-size: 0.85rem; color: var(--text-secondary);">Drag to calculate real-time foreign cost to SGD:</span>
+            <h4 style="margin: 0 0 10px 0; color: var(--text-primary);">Interactive FX Calculator</h4>
+            <span style="font-size: 0.85rem; color: var(--text-secondary);">Calculate real-time foreign cost to SGD:</span>
         </div>
         """, unsafe_allow_html=True)
-        fx_slider = st.slider(f"Foreign Price in {foreign_curr}", min_value=0, max_value=50000, value=2500, step=50)
+        fx_slider = st.slider(f"Foreign Price in {foreign_curr}", min_value=0, max_value=20000, value=1500, step=50)
         sgd_val = fx_slider / rate if rate > 0 else 0.0
         
         st.markdown(f"""
         <div class="glass-card" style="text-align: center; border-left: 5px solid var(--accent-glow);">
-            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Equivalent Home Cost</div>
+            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Equivalent SGD Cost</div>
             <div style="font-size: 2.2rem; font-weight: 800; color: var(--accent-glow);">${sgd_val:,.2f} SGD</div>
             <div style="font-size: 0.8rem; color: var(--text-secondary);">Conversion base: 1 SGD = {rate} {foreign_curr}</div>
         </div>
@@ -562,7 +579,7 @@ with tab_fx:
         st.markdown("<h4 class='font-brand'>Popular Currency Matrix (per 1 SGD)</h4>", unsafe_allow_html=True)
         matrix_data = []
         for curr_code, curr_rate in rates_dict.items():
-            if curr_code in ["JPY", "MYR", "THB", "CNY", "KRW", "TWD", "USD", "EUR", "GBP", "AUD"]:
+            if curr_code in ["CNY", "JPY", "MYR", "THB", "KRW", "TWD", "USD", "EUR", "GBP", "AUD"]:
                 matrix_data.append({
                     "Currency": curr_code,
                     "Rate (1 SGD =)": f"{curr_rate:,.2f} {curr_code}",
@@ -595,7 +612,6 @@ with tab_analytics:
             day_totals = df.groupby("trip_day")["amount_home"].sum()
             st.line_chart(day_totals, color="#38bdf8")
 
-        # CSV Export Generator
         st.markdown("---")
         st.markdown("<h4 class='font-brand'>📥 Export Ledger</h4>", unsafe_allow_html=True)
         csv_buffer = io.StringIO()
@@ -610,13 +626,13 @@ with tab_analytics:
 # --- TAB 6: Log Expense & Action Form ---
 with tab_log:
     st.markdown("<h3 class='font-brand'>➕ Record New Transaction</h3>", unsafe_allow_html=True)
-    with st.form("modern_logger_v2", clear_on_submit=True):
+    with st.form("modern_logger_gz", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            desc = st.text_input("Activity / Item*", placeholder="e.g., Shibuya Sky Rooftop Ticket")
+            desc = st.text_input("Activity / Item*", placeholder="e.g., Dim Sum at Guangzhou Restaurant")
             amt = st.number_input(f"Cost in {foreign_curr}*", min_value=0.0, step=10.0)
             category = st.selectbox("Category", ["Food & Dining", "Transport", "Activities", "Accommodation", "Shopping", "Nightlife", "Other"])
-            loc = st.text_input("City / Location Name (Optional)", placeholder="e.g., Shibuya Sky, Tokyo")
+            loc = st.text_input("City / Location Name (Optional)", placeholder="e.g., Tianhe District, Guangzhou")
         with c2:
             t_day = st.number_input("Trip Day #", min_value=1, value=1, step=1)
             payer = st.selectbox("Paid By", members if members else ["Me"])
@@ -684,22 +700,20 @@ with tab_settle:
 with tab_packing:
     st.markdown("<h3 class='font-brand'>🎒 Smart Travel Packing Checklist</h3>", unsafe_allow_html=True)
 
-    # 1. Initialize with unique IDs and categories
     if "packing_list" not in st.session_state:
         st.session_state.packing_list = [
-            {"id": 1, "name": "Passport & Flight Tickets", "done": True, "cat": "Essentials"},
-            {"id": 2, "name": "Universal Adapter & 65W GaN Charger", "done": False, "cat": "Electronics"},
-            {"id": 3, "name": "Multi-Currency Debit Card (YouTrip / Wise)", "done": True, "cat": "Money"},
-            {"id": 4, "name": "Noise Cancelling Earbuds", "done": False, "cat": "Electronics"},
-            {"id": 5, "name": "Emergency Medication / Band-Aids", "done": False, "cat": "Health"},
-            {"id": 6, "name": "Foldable Rain Jacket / Umbrella", "done": False, "cat": "Weather"}
+            {"id": 1, "name": "Passport & Chinese Visa / Entry Card", "done": True, "cat": "Essentials"},
+            {"id": 2, "name": "Alipay / WeChat Pay Linked Card", "done": True, "cat": "Money"},
+            {"id": 3, "name": "eSIM / Roaming Data with VPN", "done": False, "cat": "Electronics"},
+            {"id": 4, "name": "Universal Power Adapter & GaN Charger", "done": False, "cat": "Electronics"},
+            {"id": 5, "name": "Comfortable Walking Shoes for City Walks", "done": False, "cat": "Clothing"},
+            {"id": 6, "name": "Compact Umbrella (Guangzhou Rain Gear)", "done": False, "cat": "Weather"}
         ]
 
-    # 2. Form to add items (clears input on submit)
     with st.form("add_packing_item_form", clear_on_submit=True):
         col_in1, col_in2, col_btn = st.columns([3, 1.5, 1])
         with col_in1:
-            new_item_name = st.text_input("Gear Item Name", placeholder="e.g., GoPro Hero 12 + Extra Batteries", label_visibility="collapsed")
+            new_item_name = st.text_input("Gear Item Name", placeholder="e.g., Power Bank 20000mAh", label_visibility="collapsed")
         with col_in2:
             new_item_cat = st.selectbox("Category", ["Essentials", "Electronics", "Clothing", "Health", "Weather", "Other"], label_visibility="collapsed")
         with col_btn:
@@ -715,7 +729,6 @@ with tab_packing:
             })
             st.rerun()
 
-    # 3. Real-time progress bar calculation
     total_p = len(st.session_state.packing_list)
     done_p = sum(1 for x in st.session_state.packing_list if x["done"])
     progress_val = (done_p / total_p) if total_p > 0 else 0.0
@@ -723,7 +736,6 @@ with tab_packing:
     st.progress(progress_val)
     st.caption(f"Packed **{done_p} of {total_p}** items ({int(progress_val * 100)}%)")
 
-    # 4. Render checklist with unique keys and delete buttons
     if total_p == 0:
         st.info("No packing items yet. Add your first item above!")
     else:
