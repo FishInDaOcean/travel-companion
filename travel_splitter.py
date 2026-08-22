@@ -188,8 +188,7 @@ def fetch_live_rates(base="SGD"):
         pass
     fallback = {
         "JPY": 115.0, "MYR": 3.48, "THB": 26.8, "CNY": 5.38, "TWD": 24.2, 
-        "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60, "VND": 19000.0, 
-        "IDR": 12000.0, "AUD": 1.15
+        "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60, "VND": 19000.0
     }
     return fallback, "🟠 Fallback Offline"
 
