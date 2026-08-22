@@ -237,7 +237,8 @@ with st.sidebar:
     rates_dict, status_msg = fetch_live_rates("SGD")
     st.caption(f"Rates Status: {status_msg}")
 
-    popular_currencies = ["JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "Other"]
+    # CNY is now selectable directly from the dropdown
+    popular_currencies = ["JPY", "MYR", "THB", "CNY", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
     selected_foreign = st.selectbox("Active Foreign Currency", popular_currencies, index=0)
     foreign_curr = st.text_input("Custom Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
 
