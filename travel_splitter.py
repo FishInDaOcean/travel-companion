@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import requests
+import os
 from datetime import date
 import folium
 from streamlit_folium import st_folium
@@ -9,7 +10,7 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import io
 
-# --- 1. Mobile-First Page Configuration & Responsive CSS ---
+# --- 1. System Config & Responsive CSS ---
 st.set_page_config(
     page_title="Travel Companion",
     page_icon="✈️",
@@ -20,12 +21,8 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+    html, body, [class*="css"] { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 
-    /* Mobile container padding reduction */
     .block-container {
         padding-top: 1.2rem;
         padding-bottom: 3rem;
@@ -33,20 +30,14 @@ st.markdown("""
         padding-right: 0.8rem;
     }
 
-    /* Touch-friendly 44px minimum target heights */
     .stButton > button {
         min-height: 44px;
         border-radius: 10px;
         font-weight: 600;
         font-size: 0.95rem;
         width: 100%;
-        transition: transform 0.1s ease;
-    }
-    .stButton > button:active {
-        transform: scale(0.98);
     }
 
-    /* Mobile-optimized tab headers */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         overflow-x: auto;
@@ -54,18 +45,14 @@ st.markdown("""
         padding-bottom: 6px;
         scrollbar-width: none;
     }
-    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
-        display: none;
-    }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
     .stTabs [data-baseweb="tab"] {
         height: 40px;
         padding: 0 14px;
         font-size: 0.85rem;
         font-weight: 600;
-        border-radius: 8px;
     }
 
-    /* Card-based layout tags */
     .badge-chip {
         display: inline-block;
         padding: 3px 8px;
@@ -86,7 +73,6 @@ st.markdown("""
         color: #64748b;
     }
 
-    /* High-contrast Taxi Card */
     .taxi-card {
         background: #ffffff;
         border: 2px solid #0f172a;
@@ -101,12 +87,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Database Schema & Migration Layer ---
-DB_FILE = "trip_expenses.db"
+# --- 2. Database Schema (Absolute Path & Persistent Settings) ---
+# Guarantees the DB stays in the script's exact folder
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trip_expenses.db")
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    
+    # 1. Expenses Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,6 +115,22 @@ def init_db():
             trip_day INTEGER DEFAULT 1
         )
     """)
+    
+    # Automatic column patcher (ensures older DBs never crash on insert)
+    existing_cols = [row[1] for row in c.execute("PRAGMA table_info(expenses)").fetchall()]
+    needed_cols = [
+        ("split_between", "TEXT"),
+        ("payment_method", "TEXT DEFAULT 'Card'"),
+        ("location_name", "TEXT"),
+        ("latitude", "REAL"),
+        ("longitude", "REAL"),
+        ("trip_day", "INTEGER DEFAULT 1")
+    ]
+    for col, ctype in needed_cols:
+        if col not in existing_cols:
+            c.execute(f"ALTER TABLE expenses ADD COLUMN {col} {ctype}")
+
+    # 2. Itinerary Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS itinerary (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,10 +142,49 @@ def init_db():
             notes TEXT
         )
     """)
-    existing_cols = [row[1] for row in c.execute("PRAGMA table_info(expenses)").fetchall()]
-    for col, ctype in [("split_between", "TEXT"), ("payment_method", "TEXT DEFAULT 'Card'")]:
-        if col not in existing_cols:
-            c.execute(f"ALTER TABLE expenses ADD COLUMN {col} {ctype}")
+
+    # 3. Persistent App Settings (Saves destination, currency, budget across refresh)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+
+    # 4. Persistent Packing Checklist
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS packing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            done INTEGER DEFAULT 0,
+            category TEXT DEFAULT 'Essentials'
+        )
+    """)
+    if c.execute("SELECT COUNT(*) FROM packing").fetchone()[0] == 0:
+        default_items = [
+            ("Passport & Chinese Visa / Entry Card", 1, "Essentials"),
+            ("Alipay / WeChat Pay Linked Card", 1, "Money"),
+            ("eSIM / Roaming Data", 0, "Electronics"),
+            ("Power Bank & Universal GaN Adapter", 0, "Electronics"),
+            ("Compact Umbrella / Rain Shell", 0, "Weather")
+        ]
+        c.executemany("INSERT INTO packing (name, done, category) VALUES (?, ?, ?)", default_items)
+
+    conn.commit()
+    conn.close()
+
+# Database Helper Functions
+def get_setting(key, default):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    row = c.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row[0] if row else default
+
+def set_setting(key, value):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit()
     conn.close()
 
@@ -192,7 +236,34 @@ def delete_itinerary_stop(stop_id):
     conn.commit()
     conn.close()
 
-# --- 3. Live FX, Geocoding & Weather Services ---
+def get_packing_items():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM packing ORDER BY id ASC", conn)
+    conn.close()
+    return df
+
+def toggle_packing_item(item_id, done_status):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE packing SET done = ? WHERE id = ?", (1 if done_status else 0, item_id))
+    conn.commit()
+    conn.close()
+
+def add_packing_item(name, cat):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO packing (name, done, category) VALUES (?, 0, ?)", (name, cat))
+    conn.commit()
+    conn.close()
+
+def delete_packing_item(item_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM packing WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+
+# --- 3. Live FX, Geocoding & Weather ---
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
     url = f"https://open.er-api.com/v6/latest/{base}"
@@ -210,7 +281,7 @@ def fetch_live_rates(base="SGD"):
 def geocode_place(place_name):
     if not place_name or place_name.strip() == "": return None, None
     try:
-        geolocator = Nominatim(user_agent="travel_companion_mobile_v1")
+        geolocator = Nominatim(user_agent="travel_companion_persistent_app")
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         loc = geocode(place_name)
         if loc: return loc.latitude, loc.longitude
@@ -238,16 +309,29 @@ def get_live_weather(lat, lon):
 
 init_db()
 
-# --- 4. Sidebar Controls (Trip Configuration) ---
+# --- 4. Sidebar Controls (Saved Permanently to SQLite) ---
 with st.sidebar:
     st.markdown("### ⚙️ Trip Setup")
-    active_dest = st.text_input("Active City", value="Guangzhou, China")
+    
+    # Load and save destination
+    saved_dest = get_setting("dest", "Guangzhou, China")
+    active_dest = st.text_input("Active City", value=saved_dest)
+    if active_dest != saved_dest:
+        set_setting("dest", active_dest)
+
     dest_lat, dest_lon = geocode_place(active_dest)
     if not dest_lat: dest_lat, dest_lon = 23.1291, 113.2644
 
     rates_dict, status_msg = fetch_live_rates("SGD")
     popular_currencies = ["CNY", "JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "AUD", "Other"]
-    selected_foreign = st.selectbox("Currency", popular_currencies, index=0)
+    
+    saved_curr = get_setting("currency", "CNY")
+    curr_idx = popular_currencies.index(saved_curr) if saved_curr in popular_currencies else 0
+    selected_foreign = st.selectbox("Currency", popular_currencies, index=curr_idx)
+    
+    if selected_foreign != saved_curr and selected_foreign != "Other":
+        set_setting("currency", selected_foreign)
+
     foreign_curr = st.text_input("Custom Code", value="EUR").upper() if selected_foreign == "Other" else selected_foreign
 
     default_rate = float(rates_dict.get(foreign_curr, 5.38))
@@ -256,24 +340,34 @@ with st.sidebar:
 
     st.divider()
     st.markdown("### 👥 Group & Budget")
-    members_str = st.text_input("Group Members", value="Me, Alex, Jordan")
+    
+    saved_members = get_setting("members", "Me, Alex, Jordan")
+    members_str = st.text_input("Group Members", value=saved_members)
+    if members_str != saved_members:
+        set_setting("members", members_str)
     members = [m.strip() for m in members_str.split(",") if m.strip()]
 
-    total_budget_sgd = st.number_input("Budget (SGD)", value=3500.0, step=100.0)
-    trip_days = st.number_input("Days", min_value=1, value=7, step=1)
+    saved_budget = float(get_setting("budget", 3500.0))
+    total_budget_sgd = st.number_input("Budget (SGD)", value=saved_budget, step=100.0)
+    if total_budget_sgd != saved_budget:
+        set_setting("budget", total_budget_sgd)
+
+    saved_days = int(get_setting("days", 7))
+    trip_days = st.number_input("Days", min_value=1, value=saved_days, step=1)
+    if trip_days != saved_days:
+        set_setting("days", trip_days)
 
 df = get_expenses()
 total_spent_sgd = df["amount_home"].sum() if not df.empty else 0.0
 remaining_budget = total_budget_sgd - total_spent_sgd
 
-# --- 5. Mobile Compact Header & Telemetry ---
+# --- 5. Header & Telemetry ---
 weather = get_live_weather(dest_lat, dest_lon)
 w_str = f" • {weather['temp']}°C {weather['condition']}" if weather else ""
 
 st.markdown(f"### ✈️ Travel Companion")
 st.caption(f"📍 **{active_dest}**{w_str} • **1 SGD = {rate:.2f} {foreign_curr}**")
 
-# Quick metric row (stacked for mobile)
 m1, m2 = st.columns(2)
 pct_spent = (total_spent_sgd / total_budget_sgd * 100) if total_budget_sgd > 0 else 0
 m1.metric("Spent", f"${total_spent_sgd:,.2f}", f"{pct_spent:.0f}% of budget")
@@ -310,18 +404,19 @@ with st.expander("➕ **Log New Expense**", expanded=False):
             else:
                 st.error("Please fill in description, amount, and at least 1 person.")
 
-# --- 7. Mobile Streamlined Tabs ---
-tab_cards, tab_budgets, tab_settle, tab_itinerary, tab_taxi, tab_map, tab_fx = st.tabs([
+# --- 7. Navigation Tabs ---
+tab_cards, tab_budgets, tab_settle, tab_itinerary, tab_packing, tab_taxi, tab_map, tab_fx = st.tabs([
     "💳 Ledger",
     "🎯 Budgets",
     "🤝 Split",
     "🗓️ Planner",
+    "🎒 Packing",
     "🚕 Taxi",
     "🗺️ Map",
     "⚡ FX"
 ])
 
-# --- TAB 1: Mobile Card-Based Feed ---
+# --- TAB 1: Mobile Card Feed ---
 with tab_cards:
     if not df.empty:
         c_head, c_exp = st.columns([2, 1])
@@ -333,21 +428,18 @@ with tab_cards:
 
         for _, row in df.iterrows():
             with st.container(border=True):
-                # Header row: Description + SGD Cost
                 col_title, col_cost = st.columns([2.5, 1.5])
                 with col_title:
                     st.markdown(f"**{row['description']}**")
                 with col_cost:
                     st.markdown(f"<div style='text-align:right; font-weight:800; font-size:1.05rem; color:#2563eb;'>${row['amount_home']:,.2f} <span style='font-size:0.75rem; color:#64748b;'>SGD</span></div>", unsafe_allow_html=True)
 
-                # Sub-row: Category, Payment method, foreign price
                 st.markdown(f"""
                 <span class='badge-chip'>{row['category']}</span> 
                 <span class='method-chip'>{row['payment_method']}</span>
                 <span style='font-size:0.8rem; color:#64748b; float:right;'>{row['amount_foreign']:,.0f} {row['currency']}</span>
                 """, unsafe_allow_html=True)
 
-                # Details row: Day, Date, Payer & Split Info
                 loc_txt = f" • 📍 {row['location_name']}" if row['location_name'] else ""
                 split_txt = "All" if len(str(row['split_between']).split(',')) == len(members) else row['split_between']
                 st.caption(f"Day {row['trip_day']} ({row['expense_date']}){loc_txt}\n\nPaid by **{row['paid_by']}** • Split: *{split_txt}*")
@@ -465,7 +557,42 @@ with tab_itinerary:
     else:
         st.info("No planned stops yet.")
 
-# --- TAB 5: Taxi Card Helper ---
+# --- TAB 5: Persistent Packing Checklist ---
+with tab_packing:
+    st.markdown("#### 🎒 Packing Checklist")
+    
+    with st.form("add_packing_item_form", clear_on_submit=True):
+        p_c1, p_c2 = st.columns([3, 1])
+        with p_c1: p_name = st.text_input("New Gear Item", placeholder="e.g., Power Bank 20000mAh", label_visibility="collapsed")
+        with p_c2: p_btn = st.form_submit_button("Add", use_container_width=True)
+        if p_btn and p_name.strip():
+            add_packing_item(p_name.strip(), "General")
+            st.rerun()
+
+    pack_df = get_packing_items()
+    if not pack_df.empty:
+        total_p = len(pack_df)
+        done_p = int(pack_df["done"].sum())
+        st.progress(done_p / total_p if total_p > 0 else 0)
+        st.caption(f"**{done_p}/{total_p}** packed ({int(done_p/total_p*100)}%)")
+
+        for _, item in pack_df.iterrows():
+            with st.container(border=True):
+                chk_col, del_col = st.columns([4, 1])
+                with chk_col:
+                    is_done = bool(item["done"])
+                    checked = st.checkbox(item["name"], value=is_done, key=f"p_item_{item['id']}")
+                    if checked != is_done:
+                        toggle_packing_item(item["id"], checked)
+                        st.rerun()
+                with del_col:
+                    if st.button("✖", key=f"d_pack_{item['id']}", use_container_width=True):
+                        delete_packing_item(item["id"])
+                        st.rerun()
+    else:
+        st.info("No packing items yet.")
+
+# --- TAB 6: Taxi Card Helper ---
 with tab_taxi:
     st.markdown("#### 🚕 Taxi & Directions Card")
     preset_places = {
@@ -494,13 +621,12 @@ with tab_taxi:
     </div>
     """, unsafe_allow_html=True)
 
-# --- TAB 6: Touch-Friendly Route Map ---
+# --- TAB 7: Touch-Friendly Route Map ---
 with tab_map:
     st.markdown("#### Trip Route Map")
     map_data = df.dropna(subset=["latitude", "longitude"])
     center_lat, center_lon = (float(map_data["latitude"].mean()), float(map_data["longitude"].mean())) if not map_data.empty else (dest_lat, dest_lon)
     
-    # 320px height prevents scrolling lock on phones
     m = folium.Map(location=[center_lat, center_lon], zoom_start=11, tiles="CartoDB positron")
     if not map_data.empty:
         points = []
@@ -516,7 +642,7 @@ with tab_map:
 
     st_folium(m, height=320, use_container_width=True)
 
-# --- TAB 7: FX Calculator ---
+# --- TAB 8: FX Calculator ---
 with tab_fx:
     st.markdown(f"#### ⚡ FX Quick Calc ({foreign_curr} ⇄ SGD)")
     calc_in = st.number_input(f"Amount in {foreign_curr}", value=100.0, step=50.0)
