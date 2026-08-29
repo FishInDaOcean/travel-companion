@@ -1,24 +1,101 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
+import requests
 import pydeck as pdk
-from datetime import datetime
+from datetime import date
 
 # ==============================================================================
-# 1. PAGE CONFIGURATION & LUXURY DESIGN SYSTEM
+# 1. DATABASE SETUP & PERSISTENCE (EXACT PREVIOUS SCHEMA + LOCATION SUPPORT)
+# ==============================================================================
+DB_FILE = "trip_expenses.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT,
+            amount_foreign REAL,
+            currency TEXT,
+            exchange_rate REAL,
+            amount_home REAL,
+            paid_by TEXT,
+            category TEXT,
+            expense_date TEXT,
+            latitude REAL DEFAULT 35.6762,
+            longitude REAL DEFAULT 139.6503
+        )
+    """)
+    # Ensure latitude and longitude columns exist if upgrading existing db
+    c.execute("PRAGMA table_info(expenses)")
+    columns = [row[1] for row in c.fetchall()]
+    if "latitude" not in columns:
+        c.execute("ALTER TABLE expenses ADD COLUMN latitude REAL DEFAULT 35.6762")
+    if "longitude" not in columns:
+        c.execute("ALTER TABLE expenses ADD COLUMN longitude REAL DEFAULT 139.6503")
+    conn.commit()
+    conn.close()
+
+def log_expense(desc, amt_foreign, curr, rate, paid_by, category, exp_date, lat=35.6762, lon=139.6503):
+    amt_home = amt_foreign / rate if rate > 0 else amt_foreign
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO expenses (description, amount_foreign, currency, exchange_rate, amount_home, paid_by, category, expense_date, latitude, longitude)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (desc, amt_foreign, curr, rate, round(amt_home, 2), paid_by, category, exp_date, lat, lon))
+    conn.commit()
+    conn.close()
+
+def get_expenses():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM expenses ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def delete_expense(exp_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM expenses WHERE id = ?", (exp_id,))
+    conn.commit()
+    conn.close()
+
+# Cached Live Exchange Rate Fetcher
+@st.cache_data(ttl=3600)
+def fetch_live_rates(base="SGD"):
+    url = f"https://open.er-api.com/v6/latest/{base}"
+    try:
+        res = requests.get(url, timeout=5)
+        data = res.json()
+        if data.get("result") == "success":
+            return data.get("rates", {}), "Live Online"
+    except Exception:
+        pass
+    fallback = {
+        "JPY": 115.0, "MYR": 3.48, "THB": 26.8, "TWD": 24.2,
+        "KRW": 1025.0, "USD": 0.76, "EUR": 0.70, "GBP": 0.60,
+        "VND": 19000.0, "IDR": 12000.0, "AUD": 1.15
+    }
+    return fallback, "Offline Mode (Fallback)"
+
+init_db()
+
+# ==============================================================================
+# 2. PAGE CONFIGURATION & "QUIET LUXURY" DESIGN SYSTEM
 # ==============================================================================
 st.set_page_config(
-    page_title="Vanguard — Travel Companion",
+    page_title="Vanguard — Trip Budget & Splitter",
     page_icon="✦",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Custom Design System: Obsidian & Champagne Glassmorphism
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-    /* Global CSS Variables & Resets */
     :root {
         --bg-color: #090A0F;
         --card-bg: rgba(18, 20, 29, 0.72);
@@ -37,7 +114,6 @@ st.markdown("""
         color: var(--text-primary) !important;
     }
 
-    /* Streamlit specific UI cleanup */
     header[data-testid="stHeader"] {
         background: transparent !important;
     }
@@ -49,7 +125,7 @@ st.markdown("""
     footer { visibility: hidden !important; }
     #MainMenu { visibility: hidden !important; }
 
-    /* Frosted Luxury Ribbon */
+    /* Frosted Luxury Top Bar */
     .luxury-ribbon {
         display: flex;
         justify-content: space-between;
@@ -71,9 +147,6 @@ st.markdown("""
         align-items: center;
         gap: 8px;
     }
-    .brand-accent {
-        color: var(--accent-gold);
-    }
     .currency-ticker {
         font-family: 'JetBrains Mono', monospace;
         font-size: 12px;
@@ -85,95 +158,45 @@ st.markdown("""
         border: 1px solid rgba(212, 175, 55, 0.25);
     }
 
-    /* Glass Cards */
-    .glass-card {
-        background: var(--card-bg);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid var(--border-subtle);
-        border-radius: 14px;
-        padding: 22px;
-        margin-bottom: 16px;
-        transition: border-color 0.2s ease;
-    }
-    .glass-card:hover {
-        border-color: var(--border-hover);
-    }
-
-    /* Metric Cards */
-    .metric-container {
+    /* Metric Grid */
+    .metric-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        margin-bottom: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+        margin-bottom: 22px;
     }
-    .metric-card {
+    .metric-box {
         background: rgba(255, 255, 255, 0.02);
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
-        padding: 14px 18px;
+        padding: 16px 20px;
     }
-    .metric-label {
+    .metric-box-label {
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--text-muted);
         font-weight: 600;
     }
-    .metric-value {
-        font-size: 20px;
+    .metric-box-val {
+        font-size: 22px;
         font-weight: 600;
         color: var(--text-primary);
         font-family: 'JetBrains Mono', monospace;
         margin-top: 4px;
     }
 
-    /* Timeline Nodes */
-    .timeline-node {
-        display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        padding: 14px 16px;
-        background: rgba(255, 255, 255, 0.02);
+    /* Glass Cards */
+    .glass-panel {
+        background: var(--card-bg);
+        backdrop-filter: blur(16px);
         border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        margin-bottom: 10px;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .timeline-node:hover {
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(212, 175, 55, 0.35);
-        transform: translateX(3px);
-    }
-    .node-time {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--accent-gold);
-        min-width: 50px;
-        padding-top: 2px;
-    }
-    .node-title {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text-primary);
-    }
-    .node-desc {
-        font-size: 12px;
-        color: var(--text-secondary);
-        margin-top: 2px;
-    }
-    .node-badge {
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        padding: 3px 8px;
-        border-radius: 6px;
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text-secondary);
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 16px;
     }
 
-    /* Input & Button Refinement */
+    /* Buttons */
     div.stButton > button {
         background-color: var(--accent-gold) !important;
         color: #090A0F !important;
@@ -186,20 +209,18 @@ st.markdown("""
     }
     div.stButton > button:hover {
         background-color: #E5C358 !important;
-        box-shadow: 0 0 20px var(--accent-gold-glow) !important;
+        box-shadow: 0 0 18px var(--accent-gold-glow) !important;
         transform: translateY(-1px);
     }
-    div.stButton > button:active {
-        transform: translateY(0);
-    }
-    
-    /* Streamlit Tabs Customization */
+
+    /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: rgba(18, 20, 29, 0.5);
         padding: 6px;
         border-radius: 12px;
         border: 1px solid var(--border-subtle);
+        margin-bottom: 20px;
     }
     .stTabs [data-baseweb="tab"] {
         height: 38px;
@@ -219,234 +240,80 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. STATE MANAGEMENT & MOCK DATA
+# 3. SIDEBAR: LIVE RATES, DESTINATION CURRENCY & GROUP SETUP
 # ==============================================================================
-if "itinerary" not in st.session_state:
-    st.session_state.itinerary = [
-        {"id": 1, "day": "Day 1 • Shibuya", "time": "09:30", "title": "Fuglen Tokyo", "category": "Café", "desc": "Artisan coffee & Norwegian pastries", "cost_jpy": 1200, "lat": 35.6669, "lon": 139.6917},
-        {"id": 2, "day": "Day 1 • Shibuya", "time": "11:00", "title": "Yoyogi Park & Meiji Shrine", "category": "Culture", "desc": "Peaceful forest walk & sightseeing", "cost_jpy": 0, "lat": 35.6717, "lon": 139.6949},
-        {"id": 3, "day": "Day 1 • Shibuya", "time": "14:00", "title": "Shibuya Sky Observation", "category": "Attraction", "desc": "Panoramic rooftop views (Entry ticket booked)", "cost_jpy": 2200, "lat": 35.6585, "lon": 139.7013},
-        {"id": 4, "day": "Day 1 • Shibuya", "time": "18:30", "title": "Omoide Yokocho", "category": "Dining", "desc": "Yakitori & local izakaya dinner", "cost_jpy": 4500, "lat": 35.6932, "lon": 139.6997},
-        {"id": 5, "day": "Day 2 • Ginza & TeamLab", "time": "10:00", "title": "Ginza Six & Rooftop", "category": "Shopping", "desc": "Architecture & art installations", "cost_jpy": 2500, "lat": 35.6696, "lon": 139.7640},
-        {"id": 6, "day": "Day 2 • Ginza & TeamLab", "time": "14:30", "title": "teamLab Planets Toyosu", "category": "Attraction", "desc": "Immersive digital art exhibition", "cost_jpy": 3800, "lat": 35.6491, "lon": 139.7898},
-    ]
+rates_dict, status_msg = fetch_live_rates("SGD")
 
-if "expenses" not in st.session_state:
-    st.session_state.expenses = [
-        {"item": "Flight Tickets (SIN-NRT)", "amount_sgd": 680.0, "paid_by": "Alex", "category": "Transit"},
-        {"item": "Boutique Hotel Shibuya (3 Nights)", "amount_sgd": 720.0, "paid_by": "You", "category": "Lodging"},
-        {"item": "Shibuya Sky Tickets (x2)", "amount_sgd": 38.5, "paid_by": "Alex", "category": "Attraction"},
-        {"item": "Dinner @ Omoide Yokocho", "amount_sgd": 78.8, "paid_by": "You", "category": "Dining"},
-    ]
+with st.sidebar:
+    st.markdown("### ⚙️ Currency & Rates")
+    st.caption(f"Status: **{status_msg}**")
 
-if "checklist" not in st.session_state:
-    st.session_state.checklist = [
-        {"item": "Passport & Visit Japan Web QR Code", "done": True, "cat": "Essentials"},
-        {"item": "Suica Card added to Apple Wallet", "done": True, "cat": "Transit"},
-        {"item": "Universal Travel Adapter & 65W GaN Charger", "done": False, "cat": "Electronics"},
-        {"item": "eSIM / Roaming activated", "done": True, "cat": "Essentials"},
-        {"item": "Cash exchange (50,000 JPY backup)", "done": False, "cat": "Finance"},
-    ]
+    home_curr = "SGD"
+    popular_currencies = ["JPY", "MYR", "THB", "TWD", "KRW", "USD", "EUR", "GBP", "VND", "IDR", "AUD", "Other"]
+    selected_foreign = st.selectbox("Destination Currency", popular_currencies, index=0)
 
-# Fixed exchange rate (1 SGD to JPY)
-EXCHANGE_RATE_SGD_JPY = 114.20
-TOTAL_BUDGET_SGD = 2500.0
+    if selected_foreign == "Other":
+        foreign_curr = st.text_input("Enter Currency Code (e.g. CHF, NZD)", value="EUR").upper()
+    else:
+        foreign_curr = selected_foreign
 
-# Calculate Total Expenses
-total_spent_sgd = sum(e["amount_sgd"] for e in st.session_state.expenses)
-remaining_budget_sgd = TOTAL_BUDGET_SGD - total_spent_sgd
+    default_live_rate = float(rates_dict.get(foreign_curr, 1.0))
 
-# ==============================================================================
-# 3. EXECUTIVE HEADER RIBBON
-# ==============================================================================
+    rate = st.number_input(
+        f"Rate (1 {home_curr} = X {foreign_curr})",
+        value=default_live_rate,
+        format="%.4f"
+    )
+
+    st.markdown("---")
+    st.markdown("### 👥 Group Members")
+    members_str = st.text_input("Names (comma-separated)", value="Me, Alex, Jordan")
+    members = [m.strip() for m in members_str.split(",") if m.strip()]
+
+    st.markdown("---")
+    st.markdown("### ⚡ Quick Converter")
+    calc_foreign = st.number_input(f"Amount in {foreign_curr}", value=1000.0, step=100.0)
+    converted_sgd = (calc_foreign / rate) if rate > 0 else 0.0
+    st.markdown(f"""
+    <div style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.25); border-radius: 8px; padding: 10px 14px; text-align: center;">
+        <span style="font-size: 11px; color: #94A3B8; text-transform: uppercase;">Equivalent in SGD</span><br/>
+        <span style="font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 600; color: #D4AF37;">S${converted_sgd:,.2f}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Fetch latest expenses
+df = get_expenses()
+total_foreign = df["amount_foreign"].sum() if not df.empty else 0.0
+total_sgd = df["amount_home"].sum() if not df.empty else 0.0
+
+# Top Ribbon
 st.markdown(f"""
 <div class="luxury-ribbon">
     <div class="brand-title">
-        <span class="brand-accent">✦</span> VANGUARD &nbsp;<span style="color:#475569; font-weight:400;">| &nbsp;Tokyo Autumn Expedition</span>
+        <span style="color:#D4AF37;">✦</span> VANGUARD &nbsp;<span style="color:#475569; font-weight:400;">| &nbsp;Overseas Travel Budget & Splitter</span>
     </div>
-    <div style="display: flex; gap: 12px; align-items: center;">
-        <div class="currency-ticker">1 SGD ≈ {EXCHANGE_RATE_SGD_JPY:.2f} JPY</div>
-        <div style="font-size: 13px; color: #94A3B8;">Oct 12 – Oct 19, 2026</div>
-    </div>
+    <div class="currency-ticker">1 SGD = {rate:.2f} {foreign_curr}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Overview Metrics Strip
+# Top Metrics Grid
 st.markdown(f"""
-<div class="metric-container">
-    <div class="metric-card">
-        <div class="metric-label">Total Allocated Budget</div>
-        <div class="metric-value">S${TOTAL_BUDGET_SGD:,.2f}</div>
+<div class="metric-grid">
+    <div class="metric-box">
+        <div class="metric-box-label">Total Spent (Foreign)</div>
+        <div class="metric-box-val">{total_foreign:,.2f} <span style="font-size: 13px; color: #64748B;">{foreign_curr}</span></div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">Total Expenses Tracked</div>
-        <div class="metric-value" style="color: #D4AF37;">S${total_spent_sgd:,.2f}</div>
+    <div class="metric-box">
+        <div class="metric-box-label">Total Spent (SGD Base)</div>
+        <div class="metric-box-val" style="color: #D4AF37;">S${total_sgd:,.2f}</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">Remaining Balance</div>
-        <div class="metric-value" style="color: {'#34D399' if remaining_budget_sgd >= 0 else '#F87171'};">S${remaining_budget_sgd:,.2f}</div>
+    <div class="metric-box">
+        <div class="metric-box-label">Total Entries Logged</div>
+        <div class="metric-box-val">{len(df)}</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">Active Itinerary Stops</div>
-        <div class="metric-value">{len(st.session_state.itinerary)} Locations</div>
+    <div class="metric-box">
+        <div class="metric-box-label">Group Members</div>
+        <div class="metric-box-val">{len(members)}</div>
     </div>
 </div>
-""", unsafe_allow_html=True)
-
-# ==============================================================================
-# 4. WORKSPACE TABS (PROGRESSIVE DISCLOSURE)
-# ==============================================================================
-tab_itinerary, tab_expenses, tab_vault = st.tabs(["✦ Spatial Itinerary", "✦ Expense Splitter", "✦ Checklist & Vault"])
-
-# ------------------------------------------------------------------------------
-# TAB 1: ITINERARY & ZERO-KEY MAP
-# ------------------------------------------------------------------------------
-with tab_itinerary:
-    col_timeline, col_map = st.columns([1, 1.35], gap="large")
-
-    with col_timeline:
-        st.markdown("#### Schedule & Stops")
-        
-        # Day Filter
-        days = list(dict.fromkeys(item["day"] for item in st.session_state.itinerary))
-        if not days:
-            days = ["Day 1 • General"]
-            
-        selected_day = st.segmented_control(
-            "Selected Day",
-            options=days,
-            default=days[0],
-            label_visibility="collapsed"
-        )
-
-        filtered_stops = [item for item in st.session_state.itinerary if item["day"] == selected_day]
-
-        # Render Timeline Items
-        if filtered_stops:
-            for item in filtered_stops:
-                cost_sgd = item['cost_jpy'] / EXCHANGE_RATE_SGD_JPY
-                cost_str = f"¥{item['cost_jpy']:,} (~S${cost_sgd:.1f})" if item['cost_jpy'] > 0 else "Free"
-                st.markdown(f"""
-                <div class="timeline-node">
-                    <div class="node-time">{item['time']}</div>
-                    <div style="flex-grow: 1;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="node-title">{item['title']}</span>
-                            <span class="node-badge">{item['category']}</span>
-                        </div>
-                        <div class="node-desc">{item['desc']}</div>
-                    </div>
-                    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#D4AF37; font-weight:500;">
-                        {cost_str}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No stops added for this day yet.")
-
-        # Quick Inline Add Stop Modal / Expander
-        with st.expander("+ Add Stop to Itinerary"):
-            with st.form("new_stop_form", clear_on_submit=True):
-                c1, c2 = st.columns([1, 1])
-                new_time = c1.text_input("Time (HH:MM)", value="12:00")
-                new_cat = c2.selectbox("Category", ["Dining", "Sightseeing", "Café", "Attraction", "Shopping", "Transit"])
-                new_title = st.text_input("Place Name", placeholder="e.g. Tsukiji Outer Market")
-                new_desc = st.text_input("Notes / Details", placeholder="e.g. Try fresh sashimi bowl")
-                
-                c3, c4, c5 = st.columns([1, 1, 1])
-                new_cost = c3.number_input("Cost (JPY)", min_value=0, value=1500, step=100)
-                new_lat = c4.number_input("Latitude", value=35.6655, format="%.4f")
-                new_lon = c5.number_input("Longitude", value=139.7707, format="%.4f")
-                
-                submit_stop = st.form_submit_button("Add Stop to Timeline")
-                if submit_stop and new_title:
-                    new_item = {
-                        "id": len(st.session_state.itinerary) + 1,
-                        "day": selected_day,
-                        "time": new_time,
-                        "title": new_title,
-                        "category": new_cat,
-                        "desc": new_desc,
-                        "cost_jpy": int(new_cost),
-                        "lat": float(new_lat),
-                        "lon": float(new_lon)
-                    }
-                    st.session_state.itinerary.append(new_item)
-                    st.rerun()
-
-    with col_map:
-        st.markdown("#### Spatial Navigation (No API Key Required)")
-        
-        # Prepare Map Data
-        map_df = pd.DataFrame(filtered_stops if filtered_stops else st.session_state.itinerary)
-        
-        if not map_df.empty:
-            # Scatter Layer (Gold Nodes)
-            scatter_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_df,
-                get_position="[lon, lat]",
-                get_color="[212, 175, 55, 220]",
-                get_radius=110,
-                radius_min_pixels=6,
-                radius_max_pixels=15,
-                pickable=True,
-                auto_highlight=True,
-            )
-
-            # Connected Route Path Layer
-            path_data = [{"path": map_df[["lon", "lat"]].values.tolist()}]
-            path_layer = pdk.Layer(
-                "PathLayer",
-                data=path_data,
-                get_path="path",
-                get_color="[212, 175, 55, 100]",
-                width_scale=20,
-                width_min_pixels=2,
-            )
-
-            # Viewport Center
-            view_state = pdk.ViewState(
-                latitude=map_df["lat"].mean(),
-                longitude=map_df["lon"].mean(),
-                zoom=12.5,
-                pitch=25,
-            )
-
-            # 100% Free Carto Dark Matter Style (No API Key needed)
-            deck = pdk.Deck(
-                layers=[path_layer, scatter_layer],
-                initial_view_state=view_state,
-                map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-                tooltip={"html": "<b>{title}</b><br/>{category} • {time}<br/>{desc}", "style": {"backgroundColor": "#12131A", "color": "#F8FAFC", "border": "1px solid rgba(255,255,255,0.1)", "borderRadius": "8px"}}
-            )
-            st.pydeck_chart(deck, use_container_width=True)
-        else:
-            st.info("No coordinates available to map.")
-
-# ------------------------------------------------------------------------------
-# TAB 2: EXPENSE TRACKER & SMART SPLITTER
-# ------------------------------------------------------------------------------
-with tab_expenses:
-    col_exp_list, col_exp_calc = st.columns([1.2, 1], gap="large")
-
-    with col_exp_list:
-        st.markdown("#### Expense Ledger")
-        
-        # Display Expenses Table
-        if st.session_state.expenses:
-            exp_df = pd.DataFrame(st.session_state.expenses)
-            exp_df["Amount (SGD)"] = exp_df["amount_sgd"].apply(lambda x: f"S${x:,.2f}")
-            exp_df["Equiv (JPY)"] = exp_df["amount_sgd"].apply(lambda x: f"¥{int(x * EXCHANGE_RATE_SGD_JPY):,}")
-            
-            st.dataframe(
-                exp_df[["item", "category", "paid_by", "Amount (SGD)", "Equiv (JPY)"]].rename(columns={
-                    "item": "Description",
-                    "category": "Category",
-                    "paid_by": "Paid By"
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
-        
-        # Add Expense
+""", unsafe_allow_html=
