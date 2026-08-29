@@ -6,14 +6,15 @@ import pydeck as pdk
 from datetime import date, datetime, timedelta
 
 # ==============================================================================
-# 1. DATABASE SETUP & PERSISTENCE
+# 1. DATABASE SETUP & AUTOMATIC MIGRATION (CRITICAL BUG FIX)
 # ==============================================================================
 DB_FILE = "trip_expenses.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # Expenses Table
+    
+    # 1. Expenses Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,18 +31,16 @@ def init_db():
             split_with TEXT DEFAULT 'ALL'
         )
     """)
-    
-    # Checklist Table
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS checklist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item TEXT,
-            category TEXT,
-            is_done INTEGER DEFAULT 0
-        )
-    """)
-    
-    # Itinerary Table
+    c.execute("PRAGMA table_info(expenses)")
+    exp_cols = [row[1] for row in c.fetchall()]
+    if "latitude" not in exp_cols:
+        c.execute("ALTER TABLE expenses ADD COLUMN latitude REAL DEFAULT 31.2304")
+    if "longitude" not in exp_cols:
+        c.execute("ALTER TABLE expenses ADD COLUMN longitude REAL DEFAULT 121.4737")
+    if "split_with" not in exp_cols:
+        c.execute("ALTER TABLE expenses ADD COLUMN split_with TEXT DEFAULT 'ALL'")
+
+    # 2. Itinerary Table & Full Column Migration
     c.execute("""
         CREATE TABLE IF NOT EXISTS itinerary (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,8 +54,43 @@ def init_db():
             longitude REAL DEFAULT 121.4737
         )
     """)
-    
-    # Trip Settings Table
+    c.execute("PRAGMA table_info(itinerary)")
+    itin_cols = [row[1] for row in c.fetchall()]
+    expected_itin_cols = {
+        "day_tag": "TEXT DEFAULT 'Day 1 • General'",
+        "time_str": "TEXT DEFAULT '12:00'",
+        "place_name": "TEXT DEFAULT ''",
+        "category": "TEXT DEFAULT 'General'",
+        "notes": "TEXT DEFAULT ''",
+        "cost_foreign": "REAL DEFAULT 0.0",
+        "latitude": "REAL DEFAULT 31.2304",
+        "longitude": "REAL DEFAULT 121.4737"
+    }
+    for col_name, col_def in expected_itin_cols.items():
+        if col_name not in itin_cols:
+            c.execute(f"ALTER TABLE itinerary ADD COLUMN {col_name} {col_def}")
+
+    # 3. Checklist Table & Migration
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS checklist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item TEXT,
+            category TEXT,
+            is_done INTEGER DEFAULT 0
+        )
+    """)
+    c.execute("PRAGMA table_info(checklist)")
+    chk_cols = [row[1] for row in c.fetchall()]
+    expected_chk_cols = {
+        "item": "TEXT DEFAULT ''",
+        "category": "TEXT DEFAULT 'General'",
+        "is_done": "INTEGER DEFAULT 0"
+    }
+    for col_name, col_def in expected_chk_cols.items():
+        if col_name not in chk_cols:
+            c.execute(f"ALTER TABLE checklist ADD COLUMN {col_name} {col_def}")
+
+    # 4. Trip Settings Table
     c.execute("""
         CREATE TABLE IF NOT EXISTS trip_settings (
             id INTEGER PRIMARY KEY,
@@ -68,20 +102,10 @@ def init_db():
         )
     """)
     
-    # Dynamic Migrations
-    c.execute("PRAGMA table_info(expenses)")
-    cols = [row[1] for row in c.fetchall()]
-    if "latitude" not in cols:
-        c.execute("ALTER TABLE expenses ADD COLUMN latitude REAL DEFAULT 31.2304")
-    if "longitude" not in cols:
-        c.execute("ALTER TABLE expenses ADD COLUMN longitude REAL DEFAULT 121.4737")
-    if "split_with" not in cols:
-        c.execute("ALTER TABLE expenses ADD COLUMN split_with TEXT DEFAULT 'ALL'")
-        
     conn.commit()
     conn.close()
 
-# Database Functions
+# Database CRUD Operations
 def log_expense(desc, amt_foreign, curr, rate, paid_by, category, exp_date, lat, lon, split_with):
     amt_home = amt_foreign / rate if rate > 0 else amt_foreign
     conn = sqlite3.connect(DB_FILE)
@@ -188,7 +212,7 @@ def save_trip_settings(title, start_date_str, end_date_str, budget, members):
     conn.commit()
     conn.close()
 
-# Live Exchange Rate Fetcher
+# Cached Live Exchange Rate Fetcher
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
     url = f"https://open.er-api.com/v6/latest/{base}"
@@ -206,6 +230,7 @@ def fetch_live_rates(base="SGD"):
     }
     return fallback, "Offline Mode (Fallback)"
 
+# Initialize and migrate DB
 init_db()
 
 # Seed default checklist items if empty
@@ -664,12 +689,11 @@ with tab_breakdown:
         st.info("No expenses recorded yet. Log your first expense above.")
 
 # ------------------------------------------------------------------------------
-# TAB 3: SPATIAL MAP (100% FIXED ZERO-API-KEY VECTOR MAP + NATIVE MAP TOGGLE)
+# TAB 3: SPATIAL MAP (100% FIXED ZERO-API-KEY VECTOR MAP)
 # ------------------------------------------------------------------------------
 with tab_map:
     st.markdown("#### Geographic Expense & Itinerary Visualizer")
     
-    # Map Engine Selection (Ensures 100% fail-proof rendering)
     map_mode = st.radio("Map Rendering Engine", ["✦ Minimalist Dark Vector (Carto - Zero Token)", "✦ Native Map"], horizontal=True)
     
     map_points = []
@@ -706,10 +730,8 @@ with tab_map:
         filtered_map = df_map if sel_cat == "All Categories" else df_map[df_map["category"] == sel_cat]
         
         if map_mode == "✦ Native Map":
-            # Streamlit native OpenStreetMap / MapLibre (zero configuration, never fails)
             st.map(filtered_map, latitude="lat", longitude="lon", size=20, color="#D4AF37", use_container_width=True)
         else:
-            # Pydeck with explicit 'carto' provider — strictly ignores Mapbox tokens
             scatter_layer = pdk.Layer(
                 "ScatterplotLayer",
                 data=filtered_map,
@@ -742,8 +764,8 @@ with tab_map:
             deck = pdk.Deck(
                 layers=[path_layer, scatter_layer],
                 initial_view_state=view_state,
-                map_provider="carto",  # <--- CRITICAL FIX: Explicitly prevents Mapbox API key checks
-                map_style="dark",      # <--- Free Carto Dark Matter style
+                map_provider="carto",  # Explicitly prevents Mapbox token requirement
+                map_style="dark",
                 tooltip={
                     "html": "<b>{title}</b><br/>Category: {category}<br/>{subtitle}",
                     "style": {"backgroundColor": "#12131A", "color": "#F8FAFC", "border": "1px solid rgba(255,255,255,0.1)", "borderRadius": "8px"}
@@ -851,7 +873,6 @@ with tab_split:
 with tab_planner:
     st.markdown("#### Dynamic Trip Schedule")
     
-    # Generate auto day tags according to date range
     generated_day_options = []
     for d_idx in range(total_days):
         current_d = start_date_val + timedelta(days=d_idx)
