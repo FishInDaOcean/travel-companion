@@ -316,4 +316,205 @@ st.markdown(f"""
         <div class="metric-box-val">{len(members)}</div>
     </div>
 </div>
-""", unsafe_allow_html=
+""", unsafe_allow_html=True)
+
+# ==============================================================================
+# 4. MAIN INTERFACE TABS (ALL ORIGINAL TABS + ZERO-API-KEY VECTOR MAP)
+# ==============================================================================
+tab_add, tab_breakdown, tab_map, tab_split = st.tabs([
+    "➕ Add Expense", 
+    "📊 Trip Breakdown", 
+    "🗺️ Spatial Map (No API Key)", 
+    "🤝 Settle Up & Bill Split"
+])
+
+# ------------------------------------------------------------------------------
+# TAB 1: ADD EXPENSE (WITH OPTIONAL LOCATION COORDINATES)
+# ------------------------------------------------------------------------------
+with tab_add:
+    st.markdown("#### Record New Expense")
+    
+    col1, col2 = st.columns(2, gap="large")
+    with col1:
+        desc = st.text_input("Description", placeholder="e.g. Ichiran Ramen, Tokyo Metro Pass")
+        amt = st.number_input(f"Amount in {foreign_curr}", min_value=0.0, step=10.0)
+        category = st.selectbox("Category", ["Food & Dining", "Transport", "Accommodation", "Activities", "Shopping", "Other"])
+    
+    with col2:
+        payer = st.selectbox("Paid By", members if members else ["Me"])
+        exp_date = st.date_input("Date", value=date.today())
+        
+        # City coordinate presets to make map pinning effortless
+        preset_city = st.selectbox("Location Preset for Map", [
+            "Tokyo, Japan (35.6762, 139.6503)",
+            "Singapore (1.3521, 103.8198)",
+            "Kuala Lumpur, Malaysia (3.1390, 101.6869)",
+            "Bangkok, Thailand (13.7563, 100.5018)",
+            "Seoul, South Korea (37.5665, 126.9780)",
+            "Taipei, Taiwan (25.0330, 121.5654)",
+            "London, UK (51.5074, -0.1278)",
+            "Paris, France (48.8566, 2.3522)",
+            "New York, USA (40.7128, -74.0060)",
+            "Custom Coordinates"
+        ])
+        
+        coords_map = {
+            "Tokyo, Japan (35.6762, 139.6503)": (35.6762, 139.6503),
+            "Singapore (1.3521, 103.8198)": (1.3521, 103.8198),
+            "Kuala Lumpur, Malaysia (3.1390, 101.6869)": (3.1390, 101.6869),
+            "Bangkok, Thailand (13.7563, 100.5018)": (13.7563, 100.5018),
+            "Seoul, South Korea (37.5665, 126.9780)": (37.5665, 126.9780),
+            "Taipei, Taiwan (25.0330, 121.5654)": (25.0330, 121.5654),
+            "London, UK (51.5074, -0.1278)": (51.5074, -0.1278),
+            "Paris, France (48.8566, 2.3522)": (48.8566, 2.3522),
+            "New York, USA (40.7128, -74.0060)": (40.7128, -74.0060),
+        }
+        
+        if preset_city == "Custom Coordinates":
+            c_lat, c_lon = st.columns(2)
+            exp_lat = c_lat.number_input("Latitude", value=35.6762, format="%.4f")
+            exp_lon = c_lon.number_input("Longitude", value=139.6503, format="%.4f")
+        else:
+            exp_lat, exp_lon = coords_map[preset_city]
+
+        cost_in_sgd = amt / rate if rate > 0 else 0.0
+        st.info(f"Equivalent Cost: **{cost_in_sgd:,.2f} SGD** (at 1 SGD = {rate} {foreign_curr})")
+        
+        if st.button("Save Expense", use_container_width=True):
+            if desc and amt > 0:
+                log_expense(desc, amt, foreign_curr, rate, payer, category, str(exp_date), exp_lat, exp_lon)
+                st.success(f"Logged: {desc} ({amt:,.0f} {foreign_curr} ≈ {cost_in_sgd:,.2f} SGD)")
+                st.rerun()
+            else:
+                st.warning("Please provide a valid description and amount.")
+
+# ------------------------------------------------------------------------------
+# TAB 2: TRIP BREAKDOWN & HISTORY
+# ------------------------------------------------------------------------------
+with tab_breakdown:
+    if not df.empty:
+        st.markdown("#### Expense Ledger")
+        
+        display_df = df[["id", "expense_date", "description", "category", "amount_foreign", "currency", "amount_home", "paid_by"]].copy()
+        display_df = display_df.rename(columns={
+            "id": "ID",
+            "expense_date": "Date",
+            "description": "Description",
+            "category": "Category",
+            "amount_foreign": f"Amount ({foreign_curr})",
+            "currency": "Currency",
+            "amount_home": "Amount (SGD)",
+            "paid_by": "Paid By"
+        })
+        
+        # Format currency columns for clean readability
+        display_df[f"Amount ({foreign_curr})"] = display_df[f"Amount ({foreign_curr})"].apply(lambda x: f"{x:,.2f}")
+        display_df["Amount (SGD)"] = display_df["Amount (SGD)"].apply(lambda x: f"S${x:,.2f}")
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        col_del1, col_del2 = st.columns([1, 2])
+        with col_del1:
+            del_id = st.number_input("Delete Entry by ID", min_value=1, step=1)
+            if st.button("🗑️ Delete Selected Entry"):
+                delete_expense(del_id)
+                st.success(f"Deleted entry ID {del_id}")
+                st.rerun()
+    else:
+        st.info("No expenses recorded yet.")
+
+# ------------------------------------------------------------------------------
+# TAB 3: SPATIAL MAP (100% FREE CARTO VECTOR TILES - NO API KEY REQUIRED)
+# ------------------------------------------------------------------------------
+with tab_map:
+    st.markdown("#### Geographic Expense & Location Visualizer")
+    
+    if not df.empty and "latitude" in df.columns and "longitude" in df.columns:
+        valid_map_df = df.dropna(subset=["latitude", "longitude"])
+        
+        if not valid_map_df.empty:
+            # Gold Nodes Layer
+            scatter_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=valid_map_df,
+                get_position="[longitude, latitude]",
+                get_color="[212, 175, 55, 220]",
+                get_radius=120,
+                radius_min_pixels=6,
+                radius_max_pixels=16,
+                pickable=True,
+                auto_highlight=True,
+            )
+
+            # Center Viewport on mean coordinates
+            view_state = pdk.ViewState(
+                latitude=valid_map_df["latitude"].mean(),
+                longitude=valid_map_df["longitude"].mean(),
+                zoom=12,
+                pitch=20,
+            )
+
+            # Free Carto Dark Matter Style (No API Key required)
+            deck = pdk.Deck(
+                layers=[scatter_layer],
+                initial_view_state=view_state,
+                map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+                tooltip={
+                    "html": "<b>{description}</b><br/>Category: {category}<br/>Amount: S${amount_home} ({amount_foreign} {currency})<br/>Paid by: {paid_by}",
+                    "style": {
+                        "backgroundColor": "#12131A", 
+                        "color": "#F8FAFC", 
+                        "border": "1px solid rgba(255,255,255,0.1)", 
+                        "borderRadius": "8px"
+                    }
+                }
+            )
+            st.pydeck_chart(deck, use_container_width=True)
+        else:
+            st.info("No locations to display on map.")
+    else:
+        st.info("No expenses logged yet to visualize on the map.")
+
+# ------------------------------------------------------------------------------
+# TAB 4: SETTLE UP & GROUP SPLIT (SGD BASE)
+# ------------------------------------------------------------------------------
+with tab_split:
+    st.markdown("#### Group Split & Net Balances (in SGD)")
+    
+    if not df.empty and members:
+        total_sgd_spent = df["amount_home"].sum()
+        split_per_person = total_sgd_spent / len(members)
+        
+        c_split1, c_split2 = st.columns(2)
+        c_split1.markdown(f"""
+        <div class="glass-panel">
+            <div style="font-size: 11px; text-transform: uppercase; color: #94A3B8; font-weight: 600;">Total Group Spend</div>
+            <div style="font-family: 'JetBrains Mono'; font-size: 24px; font-weight: 600; color: #D4AF37; margin-top: 4px;">S${total_sgd_spent:,.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        c_split2.markdown(f"""
+        <div class="glass-panel">
+            <div style="font-size: 11px; text-transform: uppercase; color: #94A3B8; font-weight: 600;">Equal Share Per Person</div>
+            <div style="font-family: 'JetBrains Mono'; font-size: 24px; font-weight: 600; color: #38BDF8; margin-top: 4px;">S${split_per_person:,.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        paid_totals = df.groupby("paid_by")["amount_home"].sum().to_dict()
+        
+        summary_data = []
+        for m in members:
+            paid = paid_totals.get(m, 0.0)
+            balance = paid - split_per_person
+            summary_data.append({
+                "Member": m,
+                "Total Paid (SGD)": f"${paid:,.2f}",
+                "Fair Share (SGD)": f"${split_per_person:,.2f}",
+                "Net Balance (SGD)": f"${balance:+,.2f}",
+                "Status": "✦ Gets back money" if balance > 0.01 else "✦ Owes money" if balance < -0.01 else "✓ Settled"
+            })
+            
+        st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+    else:
+        st.info("Add expenses and group members to calculate fair splits.")
