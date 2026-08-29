@@ -1,6 +1,4 @@
 streamlit
 pandas
-folium
-streamlit-folium
-geopy
 requests
+pydeck
