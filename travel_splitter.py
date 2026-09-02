@@ -729,12 +729,13 @@ with tab_log:
             st.info(f"Target Value: **S${sgd_calc:,.2f} SGD** (Exchange Rate: 1 SGD = {rate} {parsed_curr})")
 
             if st.form_submit_button("Commit Entry to Database", use_container_width=True):
-                if f_desc and f_amt > 0:
-                    log_expense(f_desc, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
-                    st.success(f"✓ Stored: {f_desc} ({f_amt:,.2f} {parsed_curr} ≈ S${sgd_calc:,.2f})")
-                    st.rerun()
-                else:
-                    st.warning("Please supply a valid description and non-zero numerical amount.")
+    if f_amt > 0:
+        desc_to_save = f_desc.strip() if f_desc.strip() else f"{f_cat} Expense"
+        log_expense(desc_to_save, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
+        st.success(f"✓ Stored: {desc_to_save}")
+        st.rerun()
+    else:
+        st.warning("Please enter an amount greater than 0.")
 
     with col_input2:
         st.markdown("#### 💎 Instant Conversions Cheat Sheet")
@@ -1078,9 +1079,10 @@ with tab_planner:
             else:
                 it_lat, it_lon, _ = CITY_PRESETS[it_preset]
 
-            if st.form_submit_button("Append to Schedule") and it_place:
-                add_itinerary_item(it_day, it_time, it_place, it_cat, it_notes, it_cost, it_lat, it_lon)
-                st.rerun()
+            if st.form_submit_button("Append to Schedule"):
+    place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
+    add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
+    st.rerun()
 
 # ------------------------------------------------------------------------------
 # TAB 6: PACKING & EMERGENCY VAULT
