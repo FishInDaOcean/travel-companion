@@ -1121,4 +1121,4 @@ with tab_vault:
                 • <b>Local Emergency:</b> Police: 110 (CN) / 110 (JP) / 999 (MY)
             </div>
         </div>
-        """, unsafe_allow_html=True)x
+        """, unsafe_allow_html=True)
