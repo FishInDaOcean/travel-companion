@@ -1088,48 +1088,37 @@ with tab_planner:
         orig_city = "Singapore Changi" if orig == "SIN" else "Guangzhou Baiyun"
         dest_city = "Guangzhou Baiyun" if dest == "CAN" else "Singapore Changi"
 
-        with target_col:
-            st.markdown(f"""
-            <div class="v-card" style="padding: 18px 22px; position: relative;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div>
-                        <span style="font-family: 'JetBrains Mono'; font-weight: 700; font-size: 15px; color: #FFFFFF;">{fl['flight_no']}</span>
-                        <span style="font-size: 12px; color: #64748B; margin-left: 6px;">• {fl['airline']}</span>
-                    </div>
-                    <div style="font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 600; color: {badge_color}; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.1);">
-                        {status_text}
-                    </div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                    <div>
-                        <div style="font-family: 'JetBrains Mono'; font-size: 26px; font-weight: 800; color: #E2B857;">{orig}</div>
-                        <div style="font-size: 11px; color: #94A3B8;">{orig_city}</div>
-                        <div style="font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 600; margin-top: 4px;">{dep_dt.strftime('%H:%M')}</div>
-                        <div style="font-size: 10px; color: #64748B;">{fl['dep_terminal']}</div>
-                    </div>
-                    <div style="text-align: center; flex-grow: 1; padding: 0 16px;">
-                        <div style="font-size: 11px; color: #64748B; font-family: 'JetBrains Mono';">{flight_dur_str} (Direct)</div>
-                        <div style="height: 2px; background: rgba(255,255,255,0.1); margin: 6px 0; position: relative; border-radius: 2px;">
-                            <div style="height: 100%; width: {progress_pct}%; background: linear-gradient(90deg, #E2B857, #06B6D4); border-radius: 2px;"></div>
-                        </div>
-                        <div style="font-size: 11px; color: #E2B857;">✈</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-family: 'JetBrains Mono'; font-size: 26px; font-weight: 800; color: #06B6D4;">{dest}</div>
-                        <div style="font-size: 11px; color: #94A3B8;">{dest_city}</div>
-                        <div style="font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 600; margin-top: 4px;">{arr_dt.strftime('%H:%M')}</div>
-                        <div style="font-size: 10px; color: #64748B;">{fl['arr_terminal']}</div>
-                    </div>
-                </div>
+        card_html = (
+            f'<div class="v-card" style="padding: 18px 22px; position: relative;">'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">'
+            f'<div><span style="font-family: \'JetBrains Mono\'; font-weight: 700; font-size: 15px; color: #FFFFFF;">{fl["flight_no"]}</span>'
+            f'<span style="font-size: 12px; color: #64748B; margin-left: 6px;">• {fl["airline"]}</span></div>'
+            f'<div style="font-family: \'JetBrains Mono\'; font-size: 11px; font-weight: 600; color: {badge_color}; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.1);">{status_text}</div>'
+            f'</div>'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">'
+            f'<div><div style="font-family: \'JetBrains Mono\'; font-size: 26px; font-weight: 800; color: #E2B857;">{orig}</div>'
+            f'<div style="font-size: 11px; color: #94A3B8;">{orig_city}</div>'
+            f'<div style="font-family: \'JetBrains Mono\'; font-size: 14px; font-weight: 600; margin-top: 4px;">{dep_dt.strftime("%H:%M")}</div>'
+            f'<div style="font-size: 10px; color: #64748B;">{fl["dep_terminal"]}</div></div>'
+            f'<div style="text-align: center; flex-grow: 1; padding: 0 16px;">'
+            f'<div style="font-size: 11px; color: #64748B; font-family: \'JetBrains Mono\';">{flight_dur_str} (Direct)</div>'
+            f'<div style="height: 2px; background: rgba(255,255,255,0.1); margin: 6px 0; position: relative; border-radius: 2px;">'
+            f'<div style="height: 100%; width: {progress_pct}%; background: linear-gradient(90deg, #E2B857, #06B6D4); border-radius: 2px;"></div></div>'
+            f'<div style="font-size: 11px; color: #E2B857;">✈</div></div>'
+            f'<div style="text-align: right;"><div style="font-family: \'JetBrains Mono\'; font-size: 26px; font-weight: 800; color: #06B6D4;">{dest}</div>'
+            f'<div style="font-size: 11px; color: #94A3B8;">{dest_city}</div>'
+            f'<div style="font-family: \'JetBrains Mono\'; font-size: 14px; font-weight: 600; margin-top: 4px;">{arr_dt.strftime("%H:%M")}</div>'
+            f'<div style="font-size: 10px; color: #64748B;">{fl["arr_terminal"]}</div></div>'
+            f'</div>'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px; font-size: 11px; color: #94A3B8;">'
+            f'<div>PNR: <span style="font-family: \'JetBrains Mono\'; font-weight: 600; color: #FFFFFF;">{fl["booking_ref"]}</span></div>'
+            f'<div>Date: <span style="font-family: \'JetBrains Mono\'; color: #FFFFFF;">{dep_dt.strftime("%d %b %Y")}</span></div>'
+            f'<a href="https://www.flightradar24.com/data/flights/{fl["flight_no"].lower()}" target="_blank" style="color: #06B6D4; text-decoration: none; font-weight: 600;">Live Radar ↗</a></div>'
+            f'</div>'
+        )
 
-                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px; font-size: 11px; color: #94A3B8;">
-                    <div>PNR: <span style="font-family: 'JetBrains Mono'; font-weight: 600; color: #FFFFFF;">{fl['booking_ref']}</span></div>
-                    <div>Date: <span style="font-family: 'JetBrains Mono'; color: #FFFFFF;">{dep_dt.strftime('%d %b %Y')}</span></div>
-                    <a href="https://www.flightradar24.com/data/flights/{fl['flight_no'].lower()}" target="_blank" style="color: #06B6D4; text-decoration: none; font-weight: 600;">Live Radar ↗</a>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        with target_col:
+            st.markdown(card_html, unsafe_allow_html=True)
 
     with st.expander("⚙️ Edit Flight Numbers & Times"):
         with st.form("edit_flight_form"):
@@ -1178,25 +1167,17 @@ with tab_planner:
                     cost_sgd = item['cost_foreign'] / rate if rate > 0 else 0.0
                     cost_label = f"{item['cost_foreign']:,.0f} {foreign_curr} (~S${cost_sgd:.1f})" if item['cost_foreign'] > 0 else "Free Activity"
                     
-                    st.markdown(f"""
-                    <div class="timeline-card">
-                        <div style="font-family: 'JetBrains Mono'; font-size: 13px; font-weight: 700; color: #E2B857; min-width: 60px;">
-                            {item['time_str']}
-                        </div>
-                        <div style="flex-grow: 1;">
-                            <div style="font-size: 15px; font-weight: 600; color: #FFFFFF;">
-                                {item['place_name']}
-                                <span style="font-size: 10px; font-weight: 500; color: #64748B; border: 1px solid rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 6px; margin-left: 8px;">
-                                    {item['category']}
-                                </span>
-                            </div>
-                            <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">{item['notes']}</div>
-                        </div>
-                        <div style="font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 600; color: #06B6D4;">
-                            {cost_label}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    timeline_html = (
+                        f'<div class="timeline-card">'
+                        f'<div style="font-family: \'JetBrains Mono\'; font-size: 13px; font-weight: 700; color: #E2B857; min-width: 60px;">{item["time_str"]}</div>'
+                        f'<div style="flex-grow: 1;">'
+                        f'<div style="font-size: 15px; font-weight: 600; color: #FFFFFF;">{item["place_name"]}'
+                        f'<span style="font-size: 10px; font-weight: 500; color: #64748B; border: 1px solid rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 6px; margin-left: 8px;">{item["category"]}</span></div>'
+                        f'<div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">{item["notes"]}</div></div>'
+                        f'<div style="font-family: \'JetBrains Mono\'; font-size: 12px; font-weight: 600; color: #06B6D4;">{cost_label}</div>'
+                        f'</div>'
+                    )
+                    st.markdown(timeline_html, unsafe_allow_html=True)
             else:
                 st.info(f"No itinerary stops logged for {chosen_day}.")
 
@@ -1230,7 +1211,6 @@ with tab_planner:
                 place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
                 add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
                 st.rerun()
-
 # ------------------------------------------------------------------------------
 # TAB 6: PACKING & EMERGENCY VAULT
 # ------------------------------------------------------------------------------
