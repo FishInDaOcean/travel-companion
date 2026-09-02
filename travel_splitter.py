@@ -7,7 +7,7 @@ import libsql_client
 from datetime import date, datetime, timedelta
 
 # ==============================================================================
-# 1. TURSO CLOUD DATABASE SETUP & ENGINE (HTTPS PROTOCOL)
+# 1. TURSO CLOUD DATABASE SETUP & HTTPS ENGINE
 # ==============================================================================
 DEFAULT_TURSO_URL = "https://travel-companion-fishindaocean.aws-ap-northeast-1.turso.io"
 DEFAULT_TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiI1OTJiZGY5NS1kOWEwLTQ5MDEtYTdlYS0xNWYyN2NlODU1NTMiLCJpYXQiOjE3ODgzNjU5NDksImtpZCI6IkkxX201Nmdtckg1OFhJZzZrRG1KT0VzT19zbDdjZmlfMjk1Y3RVekRNdWsiLCJyaWQiOiIyMzYzZmQ1ZC1jYjRhLTQwN2UtYmExOS1lYmUzZmY2NmM4MTgifQ.2o5ILQ7zJe4UPZtnPZLJv4CtRqjof4WxDFfhHaG5mrCmQHbVr2usTq4E2bGEYpOpyivAriLWID2f4VdySUzWDQ"
@@ -35,8 +35,8 @@ def init_db():
             paid_by TEXT,
             category TEXT,
             expense_date TEXT,
-            latitude REAL DEFAULT 31.2304,
-            longitude REAL DEFAULT 121.4737,
+            latitude REAL DEFAULT 23.1065,
+            longitude REAL DEFAULT 113.3245,
             split_with TEXT DEFAULT 'ALL'
         )
     """)
@@ -51,8 +51,8 @@ def init_db():
             category TEXT DEFAULT 'Sightseeing',
             notes TEXT DEFAULT '',
             cost_foreign REAL DEFAULT 0.0,
-            latitude REAL DEFAULT 31.2304,
-            longitude REAL DEFAULT 121.4737,
+            latitude REAL DEFAULT 23.1065,
+            longitude REAL DEFAULT 113.3245,
             is_completed INTEGER DEFAULT 0
         )
     """)
@@ -79,6 +79,21 @@ def init_db():
             end_date TEXT,
             budget_sgd REAL,
             members TEXT
+        )
+    """)
+
+    # 5. Flight Manifest Table
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS flights (
+            id INTEGER PRIMARY KEY,
+            direction TEXT,
+            flight_no TEXT,
+            airline TEXT,
+            departure_time TEXT,
+            arrival_time TEXT,
+            dep_terminal TEXT,
+            arr_terminal TEXT,
+            booking_ref TEXT
         )
     """)
     client.close()
@@ -185,13 +200,13 @@ def get_trip_settings():
             "members": row[7]
         }
     return {
-        "title": "East Asia Grand Tour 2026",
+        "title": "Greater Bay Area Expedition 2026",
         "origin_city": "Singapore (Changi SIN)",
         "origin_lat": 1.3644,
         "origin_lon": 103.9915,
         "start_date": date.today(),
-        "end_date": date.today() + timedelta(days=9),
-        "budget": 4500.0,
+        "end_date": date.today() + timedelta(days=7),
+        "budget": 3500.0,
         "members": "Sen Yuan, Alex, Jordan"
     }
 
@@ -203,11 +218,33 @@ def save_trip_settings(title, origin_city, origin_lat, origin_lon, start_date_st
     """, [title, origin_city, origin_lat, origin_lon, start_date_str, end_date_str, budget, members])
     client.close()
 
+def get_flights():
+    client = get_db_client()
+    res = client.execute("SELECT * FROM flights ORDER BY id ASC")
+    cols = res.columns
+    rows = list(res.rows)
+    client.close()
+    if rows:
+        return pd.DataFrame(rows, columns=cols)
+    return pd.DataFrame(columns=[
+        "id", "direction", "flight_no", "airline", "departure_time",
+        "arrival_time", "dep_terminal", "arr_terminal", "booking_ref"
+    ])
+
+def save_flight(flight_id, direction, flight_no, airline, dep_time, arr_time, dep_term, arr_term, pnr):
+    client = get_db_client()
+    client.execute("""
+        INSERT OR REPLACE INTO flights (id, direction, flight_no, airline, departure_time, arrival_time, dep_terminal, arr_terminal, booking_ref)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [flight_id, direction, flight_no, airline, dep_time, arr_time, dep_term, arr_term, pnr])
+    client.close()
+
 def wipe_entire_database():
     client = get_db_client()
     client.execute("DELETE FROM expenses")
     client.execute("DELETE FROM itinerary")
     client.execute("DELETE FROM checklist")
+    client.execute("DELETE FROM flights")
     client.close()
 
 # ==============================================================================
@@ -263,38 +300,37 @@ def fetch_live_weather(lat, lon):
                 "humidity": f"{curr.get('relative_humidity_2m', '--')}%",
                 "wind": f"{curr.get('wind_speed_10m', '--')} km/h",
                 "condition": condition,
-                "icon": icon,
-                "status": "Live Radar Operational"
+                "icon": icon
             }
     except Exception:
         pass
     return {
-        "temp": "22.5°C", "humidity": "64%", "wind": "12 km/h",
-        "condition": "Mild Weather", "icon": "🌤️", "status": "Simulated Atmosphere"
+        "temp": "24.5°C", "humidity": "68%", "wind": "12 km/h",
+        "condition": "Mild", "icon": "🌤️"
     }
 
 # ==============================================================================
 # 4. PRESETS
 # ==============================================================================
 CITY_PRESETS = {
-    "Guangzhou, China (Canton Tower / Haixinsha)": (23.1065, 113.3245, "CNY"),
-    "Guangzhou, China (Tianhe CBD)": (23.1362, 113.3248, "CNY"),
-    "Shenzhen, China (Futian CBD)": (22.5431, 114.0579, "CNY"),
-    "Shenzhen, China (Nanshan / OCT-LOFT)": (22.5340, 113.9870, "CNY"),
-    "Shanghai, China": (31.2304, 121.4737, "CNY"),
-    "Beijing, China": (39.9042, 116.4074, "CNY"),
-    "Hangzhou, China": (30.2741, 120.1551, "CNY"),
+    "Guangzhou (Canton Tower / Haixinsha)": (23.1065, 113.3245, "CNY"),
+    "Guangzhou (Tianhe CBD)": (23.1362, 113.3248, "CNY"),
+    "Shenzhen (Futian CBD)": (22.5431, 114.0579, "CNY"),
+    "Shenzhen (Nanshan / OCT-LOFT)": (22.5340, 113.9870, "CNY"),
+    "Shanghai (The Bund / Huangpu)": (31.2304, 121.4737, "CNY"),
+    "Beijing (Forbidden City / Chaoyang)": (39.9042, 116.4074, "CNY"),
+    "Hangzhou (West Lake)": (30.2741, 120.1551, "CNY"),
     "Hong Kong (West Kowloon / Central)": (22.3025, 114.1645, "HKD"),
-    "Tokyo, Japan": (35.6762, 139.6503, "JPY"),
-    "Kuala Lumpur, Malaysia": (3.1390, 101.6869, "MYR"),
-    "Johor Bahru, Malaysia": (1.4927, 103.7414, "MYR"),
-    "Seoul, South Korea": (37.5665, 126.9780, "KRW"),
-    "Bangkok, Thailand": (13.7563, 100.5018, "THB"),
+    "Tokyo (Shinjuku / Shibuya)": (35.6762, 139.6503, "JPY"),
+    "Kuala Lumpur (KLCC)": (3.1390, 101.6869, "MYR"),
+    "Johor Bahru (Senai / City Centre)": (1.4927, 103.7414, "MYR"),
+    "Seoul (Myeongdong)": (37.5665, 126.9780, "KRW"),
+    "Bangkok (Siam / Sukhumvit)": (13.7563, 100.5018, "THB"),
     "Custom Coordinates": (0.0, 0.0, "USD")
 }
 
 # ==============================================================================
-# 5. STREAMLIT CONFIG & CYBER-LUXURY UI
+# 5. STREAMLIT CONFIG & CYBER-LUXURY UI STYLING
 # ==============================================================================
 st.set_page_config(
     page_title="Vanguard OS — Elite Travel Companion",
@@ -310,14 +346,11 @@ st.markdown("""
     :root {
         --bg: #07090E;
         --card-bg: rgba(14, 18, 27, 0.72);
-        --card-solid: #0F131D;
         --card-border: rgba(255, 255, 255, 0.07);
-        --card-border-glow: rgba(226, 184, 87, 0.35);
         --gold: #E2B857;
         --gold-glow: rgba(226, 184, 87, 0.18);
         --cyan: #06B6D4;
         --emerald: #10B981;
-        --rose: #F43F5E;
         --text-pure: #FFFFFF;
         --text-sub: #94A3B8;
         --text-dim: #64748B;
@@ -359,7 +392,7 @@ st.markdown("""
         border-radius: 16px;
         padding: 20px 24px;
         margin-bottom: 18px;
-        transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
     .v-card:hover {
         border-color: rgba(255, 255, 255, 0.15);
@@ -563,7 +596,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### ⚠️ Database Maintenance")
-    if st.button("🗑️ Reset All Cloud Data", help="Wipes expenses, itinerary, and checklist"):
+    if st.button("🗑️ Reset All Cloud Data", help="Wipes expenses, itinerary, checklist, and flights"):
         wipe_entire_database()
         st.success("Cloud database wiped clean!")
         st.rerun()
@@ -596,7 +629,8 @@ else:
 daily_burn_velocity = total_sgd_spent / (total_days - remaining_days + 1) if (total_days - remaining_days + 1) > 0 else total_sgd_spent
 safe_daily_runway = max(0.0, remaining_sgd / remaining_days)
 
-default_dest_lat, default_dest_lon = 31.2304, 121.4737
+# Default to Guangzhou coordinates
+default_dest_lat, default_dest_lon = 23.1065, 113.3245
 if not df_itinerary.empty and pd.notnull(df_itinerary["latitude"].iloc[0]):
     default_dest_lat = float(df_itinerary["latitude"].iloc[0])
     default_dest_lon = float(df_itinerary["longitude"].iloc[0])
@@ -664,7 +698,7 @@ tab_log, tab_intel, tab_geo, tab_split, tab_planner, tab_vault = st.tabs([
     "📊 Financial Velocity & Ledger",
     "🌐 3D Arc & Vector Geospatial",
     "🤝 Optimal Debt Settlement",
-    "🗺️ Dynamic Day Matrix",
+    "🗺️ Dynamic Day Matrix & Flights",
     "🛡️ Packing & Secret Vault"
 ])
 
@@ -676,9 +710,9 @@ with tab_log:
 
     with col_input1:
         st.markdown("#### ⚡ Natural Language Quick Logger")
-        st.caption("Paste receipt text or short phrases: e.g., `180 CNY Hotpot with Alex`")
+        st.caption("Paste receipt text or short phrases: e.g., `180 CNY Dim Sum in Guangzhou with Alex`")
         
-        nlp_text = st.text_area("Quick Command Bar", placeholder="Type e.g., 250 CNY Dinner with Alex and Sen Yuan", height=90)
+        nlp_text = st.text_area("Quick Command Bar", placeholder="Type e.g., 250 CNY Canton Tower tickets with Alex and Sen Yuan", height=90)
         
         parsed_amt = 0.0
         parsed_curr = foreign_curr
@@ -686,7 +720,7 @@ with tab_log:
         
         if nlp_text:
             amt_match = re.search(r"(\d+(?:\.\d{1,2})?)", nlp_text)
-            curr_match = re.search(r"(CNY|SGD|JPY|MYR|USD|EUR|KRW|THB|TWD)", nlp_text, re.IGNORECASE)
+            curr_match = re.search(r"(CNY|SGD|JPY|MYR|USD|EUR|KRW|THB|TWD|HKD)", nlp_text, re.IGNORECASE)
             if amt_match:
                 parsed_amt = float(amt_match.group(1))
             if curr_match:
@@ -694,7 +728,7 @@ with tab_log:
             parsed_desc = nlp_text.strip()
 
         with st.form("structured_expense_form", clear_on_submit=True):
-            f_desc = st.text_input("Expense Description", value=parsed_desc if parsed_desc else "", placeholder="(Optional) e.g., Haidilao Hotpot")
+            f_desc = st.text_input("Expense Description", value=parsed_desc if parsed_desc else "", placeholder="(Optional) e.g., Canton Tower / High-Speed Rail")
             
             c_f1, c_f2 = st.columns(2)
             f_amt = c_f1.number_input(f"Amount ({parsed_curr})", min_value=0.0, value=parsed_amt if parsed_amt > 0 else 50.0, step=10.0)
@@ -707,8 +741,8 @@ with tab_log:
             f_city_preset = st.selectbox("Location Tag (For 3D Coordinates)", list(CITY_PRESETS.keys()), index=0)
             if f_city_preset == "Custom Coordinates":
                 c_la, c_lo = st.columns(2)
-                f_lat = c_la.number_input("Latitude", value=31.2304, format="%.4f")
-                f_lon = c_lo.number_input("Longitude", value=121.4737, format="%.4f")
+                f_lat = c_la.number_input("Latitude", value=23.1065, format="%.4f")
+                f_lon = c_lo.number_input("Longitude", value=113.3245, format="%.4f")
             else:
                 f_lat, f_lon, _ = CITY_PRESETS[f_city_preset]
 
@@ -722,7 +756,6 @@ with tab_log:
             sgd_calc = f_amt / rate if rate > 0 else 0.0
             st.info(f"Target Value: **S${sgd_calc:,.2f} SGD** (Exchange Rate: 1 SGD = {rate} {parsed_curr})")
 
-            # Form submit button cleanly inside the with-block
             if st.form_submit_button("Commit Entry to Database", use_container_width=True):
                 if f_amt > 0:
                     desc_to_store = f_desc.strip() if f_desc.strip() else f"{f_cat} Entry"
@@ -742,7 +775,7 @@ with tab_log:
             ref_rows.append({
                 "SGD (Home)": f"S${s:,}",
                 f"{foreign_curr} (Foreign)": f"{s * rate:,.2f} {foreign_curr}",
-                "Rough Context": "Snacks / Metro" if s <= 25 else "Fine Dining" if s <= 100 else "Hotel / Attraction" if s <= 500 else "High Speed Rail / Luxury"
+                "Rough Context": "Metro / Drinks" if s <= 25 else "Dim Sum / Dining" if s <= 100 else "Hotel / Attraction" if s <= 500 else "High-Speed Rail / Luxury"
             })
         st.dataframe(pd.DataFrame(ref_rows), use_container_width=True, hide_index=True)
 
@@ -1004,11 +1037,130 @@ with tab_split:
         st.info("Log expenses to compute settlement matrix.")
 
 # ------------------------------------------------------------------------------
-# TAB 5: DYNAMIC DAY MATRIX ITINERARY
+# TAB 5: DYNAMIC DAY MATRIX & FLIGHT HUD
 # ------------------------------------------------------------------------------
 with tab_planner:
-    st.markdown("#### Dynamic Expedition Itinerary")
+    st.markdown("#### 🛫 Flight Manifest (SIN ⇄ CAN)")
     
+    df_flights = get_flights()
+    if df_flights.empty:
+        save_flight(1, "OUTBOUND", "TR100", "Scoot", f"{s_date} 10:25", f"{s_date} 14:35", "SIN T1", "CAN T1", "ABC123SG")
+        save_flight(2, "INBOUND", "TR101", "Scoot", f"{e_date} 15:35", f"{e_date} 19:50", "CAN T1", "SIN T1", "ABC123SG")
+        df_flights = get_flights()
+
+    now_dt = datetime.now()
+    col_fl1, col_fl2 = st.columns(2, gap="large")
+
+    for idx, (_, fl) in enumerate(df_flights.iterrows()):
+        target_col = col_fl1 if idx == 0 else col_fl2
+        
+        try:
+            dep_dt = datetime.strptime(fl["departure_time"], "%Y-%m-%d %H:%M")
+            arr_dt = datetime.strptime(fl["arrival_time"], "%Y-%m-%d %H:%M")
+        except Exception:
+            dep_dt = datetime.now()
+            arr_dt = datetime.now() + timedelta(hours=4)
+
+        total_flight_mins = max(1, int((arr_dt - dep_dt).total_seconds() / 60))
+        flight_dur_str = f"{total_flight_mins // 60}h {total_flight_mins % 60}m"
+
+        if now_dt < dep_dt:
+            diff_hours = (dep_dt - now_dt).total_seconds() / 3600
+            if diff_hours <= 2:
+                badge_color = "#E2B857"
+                status_text = "Boarding Soon"
+            else:
+                badge_color = "#94A3B8"
+                status_text = f"Departs in {int(diff_hours // 24)}d {int(diff_hours % 24)}h"
+            progress_pct = 0
+        elif dep_dt <= now_dt <= arr_dt:
+            elapsed = (now_dt - dep_dt).total_seconds() / 60
+            progress_pct = int(min(100, max(5, (elapsed / total_flight_mins) * 100)))
+            badge_color = "#06B6D4"
+            status_text = f"Cruising ({progress_pct}%)"
+        else:
+            badge_color = "#10B981"
+            status_text = "Landed / Touchdown"
+            progress_pct = 100
+
+        orig = "SIN" if fl["direction"] == "OUTBOUND" else "CAN"
+        dest = "CAN" if fl["direction"] == "OUTBOUND" else "SIN"
+        orig_city = "Singapore Changi" if orig == "SIN" else "Guangzhou Baiyun"
+        dest_city = "Guangzhou Baiyun" if dest == "CAN" else "Singapore Changi"
+
+        with target_col:
+            st.markdown(f"""
+            <div class="v-card" style="padding: 18px 22px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div>
+                        <span style="font-family: 'JetBrains Mono'; font-weight: 700; font-size: 15px; color: #FFFFFF;">{fl['flight_no']}</span>
+                        <span style="font-size: 12px; color: #64748B; margin-left: 6px;">• {fl['airline']}</span>
+                    </div>
+                    <div style="font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 600; color: {badge_color}; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.1);">
+                        {status_text}
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                    <div>
+                        <div style="font-family: 'JetBrains Mono'; font-size: 26px; font-weight: 800; color: #E2B857;">{orig}</div>
+                        <div style="font-size: 11px; color: #94A3B8;">{orig_city}</div>
+                        <div style="font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 600; margin-top: 4px;">{dep_dt.strftime('%H:%M')}</div>
+                        <div style="font-size: 10px; color: #64748B;">{fl['dep_terminal']}</div>
+                    </div>
+                    <div style="text-align: center; flex-grow: 1; padding: 0 16px;">
+                        <div style="font-size: 11px; color: #64748B; font-family: 'JetBrains Mono';">{flight_dur_str} (Direct)</div>
+                        <div style="height: 2px; background: rgba(255,255,255,0.1); margin: 6px 0; position: relative; border-radius: 2px;">
+                            <div style="height: 100%; width: {progress_pct}%; background: linear-gradient(90deg, #E2B857, #06B6D4); border-radius: 2px;"></div>
+                        </div>
+                        <div style="font-size: 11px; color: #E2B857;">✈</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-family: 'JetBrains Mono'; font-size: 26px; font-weight: 800; color: #06B6D4;">{dest}</div>
+                        <div style="font-size: 11px; color: #94A3B8;">{dest_city}</div>
+                        <div style="font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 600; margin-top: 4px;">{arr_dt.strftime('%H:%M')}</div>
+                        <div style="font-size: 10px; color: #64748B;">{fl['arr_terminal']}</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px; font-size: 11px; color: #94A3B8;">
+                    <div>PNR: <span style="font-family: 'JetBrains Mono'; font-weight: 600; color: #FFFFFF;">{fl['booking_ref']}</span></div>
+                    <div>Date: <span style="font-family: 'JetBrains Mono'; color: #FFFFFF;">{dep_dt.strftime('%d %b %Y')}</span></div>
+                    <a href="https://www.flightradar24.com/data/flights/{fl['flight_no'].lower()}" target="_blank" style="color: #06B6D4; text-decoration: none; font-weight: 600;">Live Radar ↗</a>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with st.expander("⚙️ Edit Flight Numbers & Times"):
+        with st.form("edit_flight_form"):
+            c_ef1, c_ef2 = st.columns(2)
+            with c_ef1:
+                st.markdown("**Outbound (SIN ➔ CAN)**")
+                f1_no = st.text_input("Flight No", value=df_flights.iloc[0]["flight_no"] if not df_flights.empty else "TR100")
+                f1_air = st.text_input("Airline", value=df_flights.iloc[0]["airline"] if not df_flights.empty else "Scoot")
+                f1_dep = st.text_input("Dep Time (YYYY-MM-DD HH:MM)", value=df_flights.iloc[0]["departure_time"] if not df_flights.empty else f"{s_date} 10:25")
+                f1_arr = st.text_input("Arr Time (YYYY-MM-DD HH:MM)", value=df_flights.iloc[0]["arrival_time"] if not df_flights.empty else f"{s_date} 14:35")
+                f1_dep_t = st.text_input("Dep Terminal", value=df_flights.iloc[0]["dep_terminal"] if not df_flights.empty else "SIN T1")
+                f1_arr_t = st.text_input("Arr Terminal", value=df_flights.iloc[0]["arr_terminal"] if not df_flights.empty else "CAN T1")
+                f1_pnr = st.text_input("Outbound PNR", value=df_flights.iloc[0]["booking_ref"] if not df_flights.empty else "ABC123SG")
+            with c_ef2:
+                st.markdown("**Inbound (CAN ➔ SIN)**")
+                f2_no = st.text_input("Return Flight No", value=df_flights.iloc[1]["flight_no"] if len(df_flights) > 1 else "TR101")
+                f2_air = st.text_input("Return Airline", value=df_flights.iloc[1]["airline"] if len(df_flights) > 1 else "Scoot")
+                f2_dep = st.text_input("Return Dep (YYYY-MM-DD HH:MM)", value=df_flights.iloc[1]["departure_time"] if len(df_flights) > 1 else f"{e_date} 15:35")
+                f2_arr = st.text_input("Return Arr (YYYY-MM-DD HH:MM)", value=df_flights.iloc[1]["arrival_time"] if len(df_flights) > 1 else f"{e_date} 19:50")
+                f2_dep_t = st.text_input("Return Dep Terminal", value=df_flights.iloc[1]["dep_terminal"] if len(df_flights) > 1 else "CAN T1")
+                f2_arr_t = st.text_input("Return Arr Terminal", value=df_flights.iloc[1]["arr_terminal"] if len(df_flights) > 1 else "SIN T1")
+                f2_pnr = st.text_input("Return PNR", value=df_flights.iloc[1]["booking_ref"] if len(df_flights) > 1 else "ABC123SG")
+
+            if st.form_submit_button("Update Flight Manifest"):
+                save_flight(1, "OUTBOUND", f1_no, f1_air, f1_dep, f1_arr, f1_dep_t, f1_arr_t, f1_pnr)
+                save_flight(2, "INBOUND", f2_no, f2_air, f2_dep, f2_arr, f2_dep_t, f2_arr_t, f2_pnr)
+                st.success("Flight details updated!")
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### Dynamic Expedition Itinerary")
     itin_days = [f"Day {idx+1} • {(s_date + timedelta(days=idx)).strftime('%a, %b %d')}" for idx in range(total_days)]
     
     col_it1, col_it2 = st.columns([1.3, 1], gap="large")
@@ -1062,19 +1214,18 @@ with tab_planner:
             c_ih1, c_ih2 = st.columns(2)
             it_time = c_ih1.text_input("Time (24-Hour)", value="14:00")
             it_cat = c_ih2.selectbox("Type", ["Sightseeing", "Dining", "Culture", "Attraction", "Transit", "Shopping", "Nightlife"])
-            it_place = st.text_input("Destination / Landmark", placeholder="(Optional) e.g., Tokyo Skytree / Yu Garden")
-            it_notes = st.text_input("Operational Notes", placeholder="(Optional) e.g., Book morning tickets online")
+            it_place = st.text_input("Destination / Landmark", placeholder="(Optional) e.g., Canton Tower / OCT-LOFT")
+            it_notes = st.text_input("Operational Notes", placeholder="(Optional) e.g., High-speed rail Guangzhou South to Futian")
             it_cost = st.number_input(f"Expected Foreign Cost ({foreign_curr})", min_value=0.0, value=0.0, step=20.0)
 
             it_preset = st.selectbox("Location Coordinates", list(CITY_PRESETS.keys()), index=0, key="itin_geo_preset")
             if it_preset == "Custom Coordinates":
                 c_il1, c_il2 = st.columns(2)
-                it_lat = c_il1.number_input("Lat", value=31.2304, format="%.4f")
-                it_lon = c_il2.number_input("Lon", value=121.4737, format="%.4f")
+                it_lat = c_il1.number_input("Lat", value=23.1065, format="%.4f")
+                it_lon = c_il2.number_input("Lon", value=113.3245, format="%.4f")
             else:
                 it_lat, it_lon, _ = CITY_PRESETS[it_preset]
 
-            # Fixed indentation: button is safely inside the form block
             if st.form_submit_button("Append to Schedule"):
                 place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
                 add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
@@ -1118,8 +1269,8 @@ with tab_vault:
             </div>
             <div style="font-size: 12px; color: #94A3B8; line-height: 1.7;">
                 • <b>Digital Wallet Safety:</b> Pre-link YouTrip / Revolut / Trust cards to Alipay / WeChat Pay.<br/>
-                • <b>High-Speed Train Boarding:</b> Physical passports work at automated China 12306 e-gates (Guangzhou South / Shenzhen North).<br/>
-                • <b>Data & Connectivity:</b> Roaming eSIMs bypass regional network restrictions automatically.
+                • <b>High-Speed Rail Boarding:</b> Physical passports work at automated China 12306 e-gates (Guangzhou South / Shenzhen North / Futian).<br/>
+                • <b>Data & Connectivity:</b> Roaming eSIMs bypass regional network firewalls automatically.
             </div>
             <hr style="border-color: rgba(255,255,255,0.08); margin: 12px 0;"/>
             <div style="font-size: 13px; font-weight: 700; color: #E2B857; margin-bottom: 6px;">
