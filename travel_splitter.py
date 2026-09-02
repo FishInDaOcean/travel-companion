@@ -7,16 +7,21 @@ import libsql_client
 from datetime import date, datetime, timedelta
 
 # ==============================================================================
-# 1. TURSO CLOUD DATABASE SETUP & ENGINE
+# 1. TURSO CLOUD DATABASE SETUP & ENGINE (HTTPS PROTOCOL)
 # ==============================================================================
-DEFAULT_TURSO_URL = "libsql://travel-companion-fishindaocean.aws-ap-northeast-1.turso.io"
+DEFAULT_TURSO_URL = "https://travel-companion-fishindaocean.aws-ap-northeast-1.turso.io"
 DEFAULT_TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiI1OTJiZGY5NS1kOWEwLTQ5MDEtYTdlYS0xNWYyN2NlODU1NTMiLCJpYXQiOjE3ODgzNjU5NDksImtpZCI6IkkxX201Nmdtckg1OFhJZzZrRG1KT0VzT19zbDdjZmlfMjk1Y3RVekRNdWsiLCJyaWQiOiIyMzYzZmQ1ZC1jYjRhLTQwN2UtYmExOS1lYmUzZmY2NmM4MTgifQ.2o5ILQ7zJe4UPZtnPZLJv4CtRqjof4WxDFfhHaG5mrCmQHbVr2usTq4E2bGEYpOpyivAriLWID2f4VdySUzWDQ"
 
 def get_db_client():
     url = st.secrets.get("TURSO_DB_URL", DEFAULT_TURSO_URL)
+    # Streamlit Cloud blocks outbound WebSockets; force HTTPS protocol
+    if url.startswith("libsql://"):
+        url = url.replace("libsql://", "https://", 1)
+        
     token = st.secrets.get("TURSO_AUTH_TOKEN", DEFAULT_TURSO_TOKEN)
     return libsql_client.create_client_sync(url=url, auth_token=token)
 
+@st.cache_resource
 def init_db():
     client = get_db_client()
     
@@ -79,7 +84,9 @@ def init_db():
         )
     """)
     client.close()
+    return True
 
+# Initialize database once on app launch
 init_db()
 
 # ==============================================================================
