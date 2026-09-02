@@ -1109,7 +1109,7 @@ with tab_vault:
                     add_checklist_item(ci_txt.strip(), ci_cat)
                     st.rerun()
 
-   with col_v2:
+    with col_v2:
         st.markdown("#### Overseas Emergency & Embassy Vault")
         st.markdown("""
         <div class="v-card">
