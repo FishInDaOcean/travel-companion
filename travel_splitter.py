@@ -1079,10 +1079,10 @@ with tab_planner:
             else:
                 it_lat, it_lon, _ = CITY_PRESETS[it_preset]
 
-            if st.form_submit_button("Append to Schedule"):
-    place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
-    add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
-    st.rerun()
+    if st.form_submit_button("Append to Schedule"):
+        place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
+        add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
+        st.rerun()
 
 # ------------------------------------------------------------------------------
 # TAB 6: PACKING & EMERGENCY VAULT
