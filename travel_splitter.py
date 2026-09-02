@@ -729,13 +729,13 @@ with tab_log:
             st.info(f"Target Value: **S${sgd_calc:,.2f} SGD** (Exchange Rate: 1 SGD = {rate} {parsed_curr})")
 
             if st.form_submit_button("Commit Entry to Database", use_container_width=True):
-    if f_amt > 0:
-        desc_to_save = f_desc.strip() if f_desc.strip() else f"{f_cat} Expense"
-        log_expense(desc_to_save, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
-        st.success(f"✓ Stored: {desc_to_save}")
-        st.rerun()
-    else:
-        st.warning("Please enter an amount greater than 0.")
+                if f_amt > 0:
+                    desc_to_save = f_desc.strip() if f_desc.strip() else f"{f_cat} Expense"
+                    log_expense(desc_to_save, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
+                    st.success(f"✓ Stored: {desc_to_save}")
+                    st.rerun()
+                else:
+                    st.warning("Please enter an amount greater than 0.")
 
     with col_input2:
         st.markdown("#### 💎 Instant Conversions Cheat Sheet")
