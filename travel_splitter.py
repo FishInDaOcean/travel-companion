@@ -277,10 +277,14 @@ def fetch_live_weather(lat, lon):
 # 4. PRESETS
 # ==============================================================================
 CITY_PRESETS = {
+    "Guangzhou, China (Canton Tower / Haixinsha)": (23.1065, 113.3245, "CNY"),
+    "Guangzhou, China (Tianhe CBD)": (23.1362, 113.3248, "CNY"),
+    "Shenzhen, China (Futian CBD)": (22.5431, 114.0579, "CNY"),
+    "Shenzhen, China (Nanshan / OCT-LOFT)": (22.5340, 113.9870, "CNY"),
     "Shanghai, China": (31.2304, 121.4737, "CNY"),
     "Beijing, China": (39.9042, 116.4074, "CNY"),
-    "Shenzhen, China": (22.5431, 114.0579, "CNY"),
     "Hangzhou, China": (30.2741, 120.1551, "CNY"),
+    "Hong Kong (West Kowloon / Central)": (22.3025, 114.1645, "HKD"),
     "Tokyo, Japan": (35.6762, 139.6503, "JPY"),
     "Kuala Lumpur, Malaysia": (3.1390, 101.6869, "MYR"),
     "Johor Bahru, Malaysia": (1.4927, 103.7414, "MYR"),
@@ -1105,7 +1109,7 @@ with tab_vault:
                     add_checklist_item(ci_txt.strip(), ci_cat)
                     st.rerun()
 
-    with col_v2:
+   with col_v2:
         st.markdown("#### Overseas Emergency & Embassy Vault")
         st.markdown("""
         <div class="v-card">
@@ -1114,16 +1118,17 @@ with tab_vault:
             </div>
             <div style="font-size: 12px; color: #94A3B8; line-height: 1.7;">
                 • <b>Digital Wallet Safety:</b> Pre-link YouTrip / Revolut / Trust cards to Alipay / WeChat Pay.<br/>
-                • <b>High-Speed Train Boarding:</b> Physical passports work at automated China 12306 e-gates.<br/>
-                • <b>Data & Connectivity:</b> Roaming eSIMs avoid strict regional firewalls automatically.
+                • <b>High-Speed Train Boarding:</b> Physical passports work at automated China 12306 e-gates (Guangzhou South / Shenzhen North).<br/>
+                • <b>Data & Connectivity:</b> Roaming eSIMs bypass regional network restrictions automatically.
             </div>
             <hr style="border-color: rgba(255,255,255,0.08); margin: 12px 0;"/>
             <div style="font-size: 13px; font-weight: 700; color: #E2B857; margin-bottom: 6px;">
                 Diplomatic & Emergency Consulates
             </div>
             <div style="font-size: 12px; color: #94A3B8; line-height: 1.7;">
-                • <b>Singapore Embassy Beijing:</b> +86-10-6532-1115<br/>
+                • <b>Consulate-General Guangzhou (covers Shenzhen):</b> +86-20-3891-2345<br/>
                 • <b>Consulate-General Shanghai:</b> +86-21-6278-5566<br/>
+                • <b>Singapore Embassy Beijing:</b> +86-10-6532-1115<br/>
                 • <b>Consulate-General Tokyo:</b> +81-3-3584-6632<br/>
                 • <b>High Commission Kuala Lumpur:</b> +60-3-2161-6277<br/>
                 • <b>Local Emergency:</b> Police: 110 (CN) / 110 (JP) / 999 (MY)
