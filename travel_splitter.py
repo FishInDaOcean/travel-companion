@@ -1,178 +1,203 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 import requests
 import pydeck as pdk
 import re
+import libsql_client
 from datetime import date, datetime, timedelta
 
 # ==============================================================================
-# 1. DATABASE SETUP & ROBUST CONTEXT MANAGERS
+# 1. TURSO CLOUD DATABASE SETUP & ENGINE
 # ==============================================================================
-DB_FILE = "vanguard_travel.db"
+DEFAULT_TURSO_URL = "libsql://travel-companion-fishindaocean.aws-ap-northeast-1.turso.io"
+DEFAULT_TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiI1OTJiZGY5NS1kOWEwLTQ5MDEtYTdlYS0xNWYyN2NlODU1NTMiLCJpYXQiOjE3ODgzNjU5NDksImtpZCI6IkkxX201Nmdtckg1OFhJZzZrRG1KT0VzT19zbDdjZmlfMjk1Y3RVekRNdWsiLCJyaWQiOiIyMzYzZmQ1ZC1jYjRhLTQwN2UtYmExOS1lYmUzZmY2NmM4MTgifQ.2o5ILQ7zJe4UPZtnPZLJv4CtRqjof4WxDFfhHaG5mrCmQHbVr2usTq4E2bGEYpOpyivAriLWID2f4VdySUzWDQ"
 
-def get_db():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+def get_db_client():
+    url = st.secrets.get("TURSO_DB_URL", DEFAULT_TURSO_URL)
+    token = st.secrets.get("TURSO_AUTH_TOKEN", DEFAULT_TURSO_TOKEN)
+    return libsql_client.create_client_sync(url=url, auth_token=token)
 
 def init_db():
-    with get_db() as conn:
-        c = conn.cursor()
-        
-        # 1. Expenses Table
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS expenses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                description TEXT,
-                amount_foreign REAL,
-                currency TEXT,
-                exchange_rate REAL,
-                amount_home REAL,
-                paid_by TEXT,
-                category TEXT,
-                expense_date TEXT,
-                latitude REAL DEFAULT 31.2304,
-                longitude REAL DEFAULT 121.4737,
-                split_with TEXT DEFAULT 'ALL'
-            )
-        """)
-        
-        # 2. Itinerary Table
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS itinerary (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                day_tag TEXT DEFAULT 'Day 1',
-                time_str TEXT DEFAULT '12:00',
-                place_name TEXT DEFAULT '',
-                category TEXT DEFAULT 'Sightseeing',
-                notes TEXT DEFAULT '',
-                cost_foreign REAL DEFAULT 0.0,
-                latitude REAL DEFAULT 31.2304,
-                longitude REAL DEFAULT 121.4737,
-                is_completed INTEGER DEFAULT 0
-            )
-        """)
-        
-        # 3. Packing & Checklist Table
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS checklist (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                item TEXT DEFAULT '',
-                category TEXT DEFAULT 'General',
-                is_done INTEGER DEFAULT 0
-            )
-        """)
-        
-        # 4. Trip Settings Table
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS trip_settings (
-                id INTEGER PRIMARY KEY,
-                trip_title TEXT,
-                origin_city TEXT,
-                origin_lat REAL,
-                origin_lon REAL,
-                start_date TEXT,
-                end_date TEXT,
-                budget_sgd REAL,
-                members TEXT
-            )
-        """)
-        conn.commit()
+    client = get_db_client()
+    
+    # 1. Expenses Table
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT,
+            amount_foreign REAL,
+            currency TEXT,
+            exchange_rate REAL,
+            amount_home REAL,
+            paid_by TEXT,
+            category TEXT,
+            expense_date TEXT,
+            latitude REAL DEFAULT 31.2304,
+            longitude REAL DEFAULT 121.4737,
+            split_with TEXT DEFAULT 'ALL'
+        )
+    """)
+    
+    # 2. Itinerary Table
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS itinerary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_tag TEXT DEFAULT 'Day 1',
+            time_str TEXT DEFAULT '12:00',
+            place_name TEXT DEFAULT '',
+            category TEXT DEFAULT 'Sightseeing',
+            notes TEXT DEFAULT '',
+            cost_foreign REAL DEFAULT 0.0,
+            latitude REAL DEFAULT 31.2304,
+            longitude REAL DEFAULT 121.4737,
+            is_completed INTEGER DEFAULT 0
+        )
+    """)
+    
+    # 3. Packing & Checklist Table
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS checklist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item TEXT DEFAULT '',
+            category TEXT DEFAULT 'General',
+            is_done INTEGER DEFAULT 0
+        )
+    """)
+    
+    # 4. Trip Settings Table
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS trip_settings (
+            id INTEGER PRIMARY KEY,
+            trip_title TEXT,
+            origin_city TEXT,
+            origin_lat REAL,
+            origin_lon REAL,
+            start_date TEXT,
+            end_date TEXT,
+            budget_sgd REAL,
+            members TEXT
+        )
+    """)
+    client.close()
 
 init_db()
 
 # ==============================================================================
-# 2. DATABASE REPOSITORY FUNCTIONS
+# 2. DATABASE REPOSITORY FUNCTIONS (TURSO CLOUD)
 # ==============================================================================
 def log_expense(desc, amt_foreign, curr, rate, paid_by, category, exp_date, lat, lon, split_with):
     amt_home = amt_foreign / rate if rate > 0 else amt_foreign
-    with get_db() as conn:
-        conn.execute("""
-            INSERT INTO expenses (description, amount_foreign, currency, exchange_rate, amount_home, paid_by, category, expense_date, latitude, longitude, split_with)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (desc, amt_foreign, curr, rate, round(amt_home, 2), paid_by, category, exp_date, lat, lon, split_with))
-        conn.commit()
+    client = get_db_client()
+    client.execute("""
+        INSERT INTO expenses (description, amount_foreign, currency, exchange_rate, amount_home, paid_by, category, expense_date, latitude, longitude, split_with)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [desc, amt_foreign, curr, rate, round(amt_home, 2), paid_by, category, exp_date, lat, lon, split_with])
+    client.close()
 
 def get_expenses():
-    with get_db() as conn:
-        return pd.read_sql_query("SELECT * FROM expenses ORDER BY id DESC", conn)
+    client = get_db_client()
+    res = client.execute("SELECT * FROM expenses ORDER BY id DESC")
+    cols = res.columns
+    rows = list(res.rows)
+    client.close()
+    if rows:
+        return pd.DataFrame(rows, columns=cols)
+    return pd.DataFrame(columns=[
+        "id", "description", "amount_foreign", "currency", "exchange_rate",
+        "amount_home", "paid_by", "category", "expense_date", "latitude", "longitude", "split_with"
+    ])
 
 def delete_expense(exp_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM expenses WHERE id = ?", (exp_id,))
-        conn.commit()
+    client = get_db_client()
+    client.execute("DELETE FROM expenses WHERE id = ?", [exp_id])
+    client.close()
 
 def get_checklist():
-    with get_db() as conn:
-        return pd.read_sql_query("SELECT * FROM checklist ORDER BY id ASC", conn)
+    client = get_db_client()
+    res = client.execute("SELECT * FROM checklist ORDER BY id ASC")
+    cols = res.columns
+    rows = list(res.rows)
+    client.close()
+    if rows:
+        return pd.DataFrame(rows, columns=cols)
+    return pd.DataFrame(columns=["id", "item", "category", "is_done"])
 
 def add_checklist_item(item, category):
-    with get_db() as conn:
-        conn.execute("INSERT INTO checklist (item, category, is_done) VALUES (?, ?, 0)", (item, category))
-        conn.commit()
+    client = get_db_client()
+    client.execute("INSERT INTO checklist (item, category, is_done) VALUES (?, ?, 0)", [item, category])
+    client.close()
 
 def toggle_checklist_item(item_id, is_done):
-    with get_db() as conn:
-        conn.execute("UPDATE checklist SET is_done = ? WHERE id = ?", (1 if is_done else 0, item_id))
-        conn.commit()
+    client = get_db_client()
+    client.execute("UPDATE checklist SET is_done = ? WHERE id = ?", [1 if is_done else 0, item_id])
+    client.close()
 
 def delete_checklist_item(item_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM checklist WHERE id = ?", (item_id,))
-        conn.commit()
+    client = get_db_client()
+    client.execute("DELETE FROM checklist WHERE id = ?", [item_id])
+    client.close()
 
 def get_itinerary():
-    with get_db() as conn:
-        return pd.read_sql_query("SELECT * FROM itinerary ORDER BY day_tag ASC, time_str ASC", conn)
+    client = get_db_client()
+    res = client.execute("SELECT * FROM itinerary ORDER BY day_tag ASC, time_str ASC")
+    cols = res.columns
+    rows = list(res.rows)
+    client.close()
+    if rows:
+        return pd.DataFrame(rows, columns=cols)
+    return pd.DataFrame(columns=[
+        "id", "day_tag", "time_str", "place_name", "category", "notes",
+        "cost_foreign", "latitude", "longitude", "is_completed"
+    ])
 
 def add_itinerary_item(day_tag, time_str, place_name, category, notes, cost_foreign, lat, lon):
-    with get_db() as conn:
-        conn.execute("""
-            INSERT INTO itinerary (day_tag, time_str, place_name, category, notes, cost_foreign, latitude, longitude, is_completed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-        """, (day_tag, time_str, place_name, category, notes, cost_foreign, lat, lon))
-        conn.commit()
+    client = get_db_client()
+    client.execute("""
+        INSERT INTO itinerary (day_tag, time_str, place_name, category, notes, cost_foreign, latitude, longitude, is_completed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+    """, [day_tag, time_str, place_name, category, notes, cost_foreign, lat, lon])
+    client.close()
 
 def delete_itinerary_item(item_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM itinerary WHERE id = ?", (item_id,))
-        conn.commit()
+    client = get_db_client()
+    client.execute("DELETE FROM itinerary WHERE id = ?", [item_id])
+    client.close()
 
 def get_trip_settings():
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("SELECT trip_title, origin_city, origin_lat, origin_lon, start_date, end_date, budget_sgd, members FROM trip_settings WHERE id = 1")
-        row = c.fetchone()
-        if row:
-            return {
-                "title": row[0],
-                "origin_city": row[1],
-                "origin_lat": row[2],
-                "origin_lon": row[3],
-                "start_date": datetime.strptime(row[4], "%Y-%m-%d").date(),
-                "end_date": datetime.strptime(row[5], "%Y-%m-%d").date(),
-                "budget": row[6],
-                "members": row[7]
-            }
+    client = get_db_client()
+    res = client.execute("SELECT trip_title, origin_city, origin_lat, origin_lon, start_date, end_date, budget_sgd, members FROM trip_settings WHERE id = 1")
+    rows = list(res.rows)
+    client.close()
+    if rows:
+        row = rows[0]
         return {
-            "title": "East Asia Grand Tour 2026",
-            "origin_city": "Singapore (Changi SIN)",
-            "origin_lat": 1.3644,
-            "origin_lon": 103.9915,
-            "start_date": date.today(),
-            "end_date": date.today() + timedelta(days=9),
-            "budget": 4500.0,
-            "members": "Sen Yuan, Alex, Jordan"
+            "title": row[0],
+            "origin_city": row[1],
+            "origin_lat": float(row[2]),
+            "origin_lon": float(row[3]),
+            "start_date": datetime.strptime(row[4], "%Y-%m-%d").date(),
+            "end_date": datetime.strptime(row[5], "%Y-%m-%d").date(),
+            "budget": float(row[6]),
+            "members": row[7]
         }
+    return {
+        "title": "East Asia Grand Tour 2026",
+        "origin_city": "Singapore (Changi SIN)",
+        "origin_lat": 1.3644,
+        "origin_lon": 103.9915,
+        "start_date": date.today(),
+        "end_date": date.today() + timedelta(days=9),
+        "budget": 4500.0,
+        "members": "Sen Yuan, Alex, Jordan"
+    }
 
 def save_trip_settings(title, origin_city, origin_lat, origin_lon, start_date_str, end_date_str, budget, members):
-    with get_db() as conn:
-        conn.execute("""
-            INSERT OR REPLACE INTO trip_settings (id, trip_title, origin_city, origin_lat, origin_lon, start_date, end_date, budget_sgd, members)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, origin_city, origin_lat, origin_lon, start_date_str, end_date_str, budget, members))
-        conn.commit()
+    client = get_db_client()
+    client.execute("""
+        INSERT OR REPLACE INTO trip_settings (id, trip_title, origin_city, origin_lat, origin_lon, start_date, end_date, budget_sgd, members)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [title, origin_city, origin_lat, origin_lon, start_date_str, end_date_str, budget, members])
+    client.close()
 
 # ==============================================================================
 # 3. LIVE EXTERNAL APIS (FOREX & ZERO-KEY OPEN-METEO WEATHER)
@@ -204,7 +229,6 @@ def fetch_live_weather(lat, lon):
             curr = data.get("current", {})
             w_code = curr.get("weather_code", 0)
             
-            # WMO Weather interpretation
             condition = "Clear Sky"
             icon = "☀️"
             if w_code in [1, 2, 3]:
@@ -276,7 +300,7 @@ def seed_demo_data():
 seed_demo_data()
 
 # ==============================================================================
-# 5. STREAMLIT CONFIG & CYBER-LUXURY GLASSMORPHISM SYSTEM
+# 5. STREAMLIT CONFIG & CYBER-LUXURY UI STYLING
 # ==============================================================================
 st.set_page_config(
     page_title="Vanguard OS — Elite Travel Companion",
@@ -311,7 +335,6 @@ st.markdown("""
         color: var(--text-pure) !important;
     }
 
-    /* Remove Streamlit default header whitespace */
     header[data-testid="stHeader"] { background: transparent !important; }
     .block-container {
         padding-top: 1.2rem !important;
@@ -320,7 +343,6 @@ st.markdown("""
     }
     footer, #MainMenu { visibility: hidden !important; }
 
-    /* Animated Status Ping */
     @keyframes pulse-glow {
         0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
         70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
@@ -335,7 +357,6 @@ st.markdown("""
         animation: pulse-glow 2s infinite;
     }
 
-    /* Cyber-Luxe Glass Panel */
     .v-card {
         background: var(--card-bg);
         backdrop-filter: blur(24px);
@@ -350,7 +371,6 @@ st.markdown("""
         border-color: rgba(255, 255, 255, 0.15);
     }
 
-    /* Flight Command Ribbon */
     .command-ribbon {
         display: flex;
         justify-content: space-between;
@@ -383,7 +403,6 @@ st.markdown("""
         border-radius: 9999px;
     }
 
-    /* Executive KPI Grid */
     .kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -420,7 +439,6 @@ st.markdown("""
         margin-top: 6px;
     }
 
-    /* Weather Satellite Badge */
     .weather-pod {
         display: flex;
         align-items: center;
@@ -431,7 +449,6 @@ st.markdown("""
         padding: 8px 16px;
     }
 
-    /* Timeline Nodes */
     .timeline-card {
         display: flex;
         align-items: flex-start;
@@ -448,7 +465,6 @@ st.markdown("""
         border-color: var(--gold-glow);
     }
 
-    /* Custom Streamlit Form Styling */
     div.stButton > button {
         background: linear-gradient(135deg, #E2B857 0%, #C99E38 100%) !important;
         color: #07090E !important;
@@ -530,7 +546,6 @@ with st.sidebar:
     if not members_list:
         members_list = ["Sen Yuan"]
 
-    # Save sidebar updates
     if (trip_title != current_settings["title"] or s_date != current_settings["start_date"] or 
         e_date != current_settings["end_date"] or total_budget_sgd != current_settings["budget"] or 
         members_raw != current_settings["members"]):
@@ -564,7 +579,6 @@ total_sgd_spent = df_expenses["amount_home"].sum() if not df_expenses.empty else
 remaining_sgd = total_budget_sgd - total_sgd_spent
 burn_rate_pct = min(100.0, (total_sgd_spent / total_budget_sgd * 100.0)) if total_budget_sgd > 0 else 0.0
 
-# Dynamic Date Engine
 today_val = date.today()
 if today_val < s_date:
     days_left_until_trip = (s_date - today_val).days
@@ -581,8 +595,7 @@ else:
 daily_burn_velocity = total_sgd_spent / (total_days - remaining_days + 1) if (total_days - remaining_days + 1) > 0 else total_sgd_spent
 safe_daily_runway = max(0.0, remaining_sgd / remaining_days)
 
-# Find primary location for weather
-default_dest_lat, default_dest_lon = 31.2304, 121.4737  # Default: Shanghai
+default_dest_lat, default_dest_lon = 31.2304, 121.4737
 if not df_itinerary.empty and pd.notnull(df_itinerary["latitude"].iloc[0]):
     default_dest_lat = float(df_itinerary["latitude"].iloc[0])
     default_dest_lon = float(df_itinerary["longitude"].iloc[0])
@@ -615,7 +628,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# KPI Metric Cards
 st.markdown(f"""
 <div class="kpi-grid">
     <div class="kpi-tile">
@@ -667,7 +679,6 @@ with tab_log:
         
         nlp_text = st.text_area("Quick Command Bar", placeholder="Type e.g., 250 CNY Dinner with Alex and Sen Yuan", height=90)
         
-        # Heuristic Regex Parser
         parsed_amt = 0.0
         parsed_curr = foreign_curr
         parsed_desc = ""
@@ -789,7 +800,6 @@ with tab_geo:
     st.markdown("#### 3D Great-Circle Flight Arcs & Geospatial Points")
     st.caption("Featuring interactive Great-Circle trajectory layers originating from Singapore Changi (SIN). Zero Mapbox Token required.")
 
-    # Base origin: Singapore Changi Airport (SIN)
     origin_lon, origin_lat = 103.9915, 1.3644
 
     dest_points = []
@@ -821,7 +831,6 @@ with tab_geo:
                     "color": [6, 182, 212, 230]
                 })
 
-    # Construct Parabolic Arcs from Origin to Distinct Destinations
     unique_coords = set((p["lat"], p["lon"]) for p in dest_points)
     for (d_lat, d_lon) in unique_coords:
         arc_routes.append({
@@ -835,7 +844,6 @@ with tab_geo:
     df_arcs = pd.DataFrame(arc_routes)
 
     if not df_points.empty:
-        # 1. 3D Column Layer for Expense & Itinerary Heights
         column_layer = pdk.Layer(
             "ColumnLayer",
             data=df_points,
@@ -848,7 +856,6 @@ with tab_geo:
             auto_highlight=True,
         )
 
-        # 2. Scatter Glow Layer
         scatter_layer = pdk.Layer(
             "ScatterplotLayer",
             data=df_points,
@@ -860,7 +867,6 @@ with tab_geo:
             pickable=True,
         )
 
-        # 3. 3D Arc Flight Layer
         arc_layer = pdk.Layer(
             "ArcLayer",
             data=df_arcs,
