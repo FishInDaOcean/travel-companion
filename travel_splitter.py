@@ -14,10 +14,8 @@ DEFAULT_TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQi
 
 def get_db_client():
     url = st.secrets.get("TURSO_DB_URL", DEFAULT_TURSO_URL)
-    # Streamlit Cloud blocks outbound WebSockets; force HTTPS protocol
     if url.startswith("libsql://"):
         url = url.replace("libsql://", "https://", 1)
-        
     token = st.secrets.get("TURSO_AUTH_TOKEN", DEFAULT_TURSO_TOKEN)
     return libsql_client.create_client_sync(url=url, auth_token=token)
 
@@ -86,11 +84,10 @@ def init_db():
     client.close()
     return True
 
-# Initialize database once on app launch
 init_db()
 
 # ==============================================================================
-# 2. DATABASE REPOSITORY FUNCTIONS (TURSO CLOUD)
+# 2. DATABASE REPOSITORY FUNCTIONS
 # ==============================================================================
 def log_expense(desc, amt_foreign, curr, rate, paid_by, category, exp_date, lat, lon, split_with):
     amt_home = amt_foreign / rate if rate > 0 else amt_foreign
@@ -206,8 +203,15 @@ def save_trip_settings(title, origin_city, origin_lat, origin_lon, start_date_st
     """, [title, origin_city, origin_lat, origin_lon, start_date_str, end_date_str, budget, members])
     client.close()
 
+def wipe_entire_database():
+    client = get_db_client()
+    client.execute("DELETE FROM expenses")
+    client.execute("DELETE FROM itinerary")
+    client.execute("DELETE FROM checklist")
+    client.close()
+
 # ==============================================================================
-# 3. LIVE EXTERNAL APIS (FOREX & ZERO-KEY OPEN-METEO WEATHER)
+# 3. LIVE EXTERNAL APIS (FOREX & OPEN-METEO WEATHER)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def fetch_live_rates(base="SGD"):
@@ -270,7 +274,7 @@ def fetch_live_weather(lat, lon):
     }
 
 # ==============================================================================
-# 4. PRESETS & SEEDING ENGINE
+# 4. PRESETS
 # ==============================================================================
 CITY_PRESETS = {
     "Shanghai, China": (31.2304, 121.4737, "CNY"),
@@ -285,29 +289,8 @@ CITY_PRESETS = {
     "Custom Coordinates": (0.0, 0.0, "USD")
 }
 
-def seed_demo_data():
-    if get_checklist().empty:
-        add_checklist_item("Passport (valid min. 6 months) & Visa Documents", "Essentials")
-        add_checklist_item("Alipay & WeChat Pay backed by SGD Cards", "Finance")
-        add_checklist_item("High-Speed Rail 12306 Verified Account", "Transit")
-        add_checklist_item("Universal Multi-plug Travel Adapter", "Electronics")
-        add_checklist_item("Unlimited Roaming eSIM / Cross-border VPN", "Tech")
-
-    if get_itinerary().empty:
-        add_itinerary_item("Day 1 • Arrival & The Bund", "10:30", "Yu Garden & Huxinting Tea House", "Culture", "Traditional soup dumplings & tea tasting", 160.0, 31.2272, 121.4921)
-        add_itinerary_item("Day 1 • Arrival & The Bund", "16:00", "The Bund Historic Promenade", "Sightseeing", "Golden hour architecture stroll", 0.0, 31.2400, 121.4900)
-        add_itinerary_item("Day 1 • Arrival & The Bund", "19:45", "Lujiazui Shanghai Tower Observatory", "Attraction", "Top deck panoramic night view", 380.0, 31.2335, 121.5056)
-        add_itinerary_item("Day 2 • French Concession", "11:00", "Wukang Road Architecture & Cafes", "Dining", "Specialty espresso & artisan bakery", 95.0, 31.2078, 121.4428)
-
-    if get_expenses().empty:
-        log_expense("Maglev Train Airport Express", 100.0, "CNY", 5.40, "Sen Yuan", "Transport", str(date.today()), 31.1443, 121.8083, "ALL")
-        log_expense("Welcome Feast at Haidilao", 420.0, "CNY", 5.40, "Alex", "Food & Dining", str(date.today()), 31.2304, 121.4737, "ALL")
-        log_expense("Shanghai Tower Observation Tickets", 540.0, "CNY", 5.40, "Sen Yuan", "Activities", str(date.today()), 31.2335, 121.5056, "ALL")
-
-seed_demo_data()
-
 # ==============================================================================
-# 5. STREAMLIT CONFIG & CYBER-LUXURY UI STYLING
+# 5. STREAMLIT CONFIG & CYBER-LUXURY UI
 # ==============================================================================
 st.set_page_config(
     page_title="Vanguard OS — Elite Travel Companion",
@@ -511,7 +494,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 6. SIDEBAR FLIGHT CONTROLLER
+# 6. SIDEBAR SETTINGS & RESET CONTROL
 # ==============================================================================
 rates_dict, sync_status = fetch_live_rates("SGD")
 current_settings = get_trip_settings()
@@ -562,7 +545,7 @@ with st.sidebar:
         )
 
     st.markdown("---")
-    st.markdown("### ⚡ Live Forex Quick-Math")
+    st.markdown("### ⚡ Quick Converter")
     quick_foreign = st.number_input(f"Amount ({foreign_curr})", value=200.0, step=50.0)
     quick_sgd = quick_foreign / rate if rate > 0 else 0.0
     st.markdown(f"""
@@ -574,8 +557,15 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("---")
+    st.markdown("### ⚠️ Database Maintenance")
+    if st.button("🗑️ Reset All Cloud Data", help="Wipes expenses, itinerary, and checklist"):
+        wipe_entire_database()
+        st.success("Cloud database wiped clean!")
+        st.rerun()
+
 # ==============================================================================
-# 7. METRICS & BUDGET RUNWAY ENGINE
+# 7. METRICS & BUDGET ENGINE
 # ==============================================================================
 df_expenses = get_expenses()
 df_checklist = get_checklist()
@@ -682,7 +672,7 @@ with tab_log:
 
     with col_input1:
         st.markdown("#### ⚡ Natural Language Quick Logger")
-        st.caption("Paste receipt text or short phrases: e.g., `180 CNY Hotpot at Bund with Alex`")
+        st.caption("Paste receipt text or short phrases: e.g., `180 CNY Hotpot with Alex`")
         
         nlp_text = st.text_area("Quick Command Bar", placeholder="Type e.g., 250 CNY Dinner with Alex and Sen Yuan", height=90)
         
@@ -700,10 +690,10 @@ with tab_log:
             parsed_desc = nlp_text.strip()
 
         with st.form("structured_expense_form", clear_on_submit=True):
-            f_desc = st.text_input("Expense Description", value=parsed_desc if parsed_desc else "")
+            f_desc = st.text_input("Expense Description", value=parsed_desc if parsed_desc else "", placeholder="(Optional) e.g., Haidilao Hotpot")
             
             c_f1, c_f2 = st.columns(2)
-            f_amt = c_f1.number_input(f"Amount ({parsed_curr})", min_value=0.0, value=parsed_amt if parsed_amt > 0 else 80.0, step=10.0)
+            f_amt = c_f1.number_input(f"Amount ({parsed_curr})", min_value=0.0, value=parsed_amt if parsed_amt > 0 else 50.0, step=10.0)
             f_cat = c_f2.selectbox("Classification", ["Food & Dining", "Transport", "Accommodation", "Activities", "Shopping", "Tech & eSIM", "Emergency", "Other"])
             
             c_p1, c_p2 = st.columns(2)
@@ -728,14 +718,15 @@ with tab_log:
             sgd_calc = f_amt / rate if rate > 0 else 0.0
             st.info(f"Target Value: **S${sgd_calc:,.2f} SGD** (Exchange Rate: 1 SGD = {rate} {parsed_curr})")
 
+            # Form submit button cleanly inside the with-block
             if st.form_submit_button("Commit Entry to Database", use_container_width=True):
                 if f_amt > 0:
-                    desc_to_save = f_desc.strip() if f_desc.strip() else f"{f_cat} Expense"
-                    log_expense(desc_to_save, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
-                    st.success(f"✓ Stored: {desc_to_save}")
+                    desc_to_store = f_desc.strip() if f_desc.strip() else f"{f_cat} Entry"
+                    log_expense(desc_to_store, f_amt, parsed_curr, rate, f_payer, f_cat, str(f_date), f_lat, f_lon, f_split_str)
+                    st.success(f"✓ Stored: {desc_to_store} ({f_amt:,.2f} {parsed_curr} ≈ S${sgd_calc:,.2f})")
                     st.rerun()
                 else:
-                    st.warning("Please enter an amount greater than 0.")
+                    st.warning("Please supply a non-zero numerical amount.")
 
     with col_input2:
         st.markdown("#### 💎 Instant Conversions Cheat Sheet")
@@ -799,7 +790,7 @@ with tab_intel:
             daily_df = df_expenses.groupby("expense_date")["amount_home"].sum().reset_index()
             st.line_chart(data=daily_df.set_index("expense_date")["amount_home"], color="#06B6D4")
     else:
-        st.info("No recorded transactions in database. Add an expense or seed data.")
+        st.info("No recorded transactions in database. Add an expense from Tab 1.")
 
 # ------------------------------------------------------------------------------
 # TAB 3: 3D ARCS & VECTOR GEOSPATIAL MAP
@@ -1067,8 +1058,8 @@ with tab_planner:
             c_ih1, c_ih2 = st.columns(2)
             it_time = c_ih1.text_input("Time (24-Hour)", value="14:00")
             it_cat = c_ih2.selectbox("Type", ["Sightseeing", "Dining", "Culture", "Attraction", "Transit", "Shopping", "Nightlife"])
-            it_place = st.text_input("Destination / Landmark", placeholder="e.g. Forbidden City / Shibuya Sky")
-            it_notes = st.text_input("Operational Notes", placeholder="e.g. Fast-track tickets booked online")
+            it_place = st.text_input("Destination / Landmark", placeholder="(Optional) e.g., Tokyo Skytree / Yu Garden")
+            it_notes = st.text_input("Operational Notes", placeholder="(Optional) e.g., Book morning tickets online")
             it_cost = st.number_input(f"Expected Foreign Cost ({foreign_curr})", min_value=0.0, value=0.0, step=20.0)
 
             it_preset = st.selectbox("Location Coordinates", list(CITY_PRESETS.keys()), index=0, key="itin_geo_preset")
@@ -1079,10 +1070,11 @@ with tab_planner:
             else:
                 it_lat, it_lon, _ = CITY_PRESETS[it_preset]
 
-    if st.form_submit_button("Append to Schedule"):
-        place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
-        add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
-        st.rerun()
+            # Fixed indentation: button is safely inside the form block
+            if st.form_submit_button("Append to Schedule"):
+                place_to_save = it_place.strip() if it_place.strip() else f"{it_cat} Stop"
+                add_itinerary_item(it_day, it_time, place_to_save, it_cat, it_notes, it_cost, it_lat, it_lon)
+                st.rerun()
 
 # ------------------------------------------------------------------------------
 # TAB 6: PACKING & EMERGENCY VAULT
@@ -1108,9 +1100,10 @@ with tab_vault:
         with st.form("add_chk_form", clear_on_submit=True):
             ci_txt = st.text_input("New Item", placeholder="e.g. Physical backup ATM cards")
             ci_cat = st.selectbox("Category", ["Essentials", "Finance", "Tech", "Electronics", "Wardrobe", "Transit", "Medicine"])
-            if st.form_submit_button("Add to Manifest") and ci_txt:
-                add_checklist_item(ci_txt, ci_cat)
-                st.rerun()
+            if st.form_submit_button("Add to Manifest"):
+                if ci_txt.strip():
+                    add_checklist_item(ci_txt.strip(), ci_cat)
+                    st.rerun()
 
     with col_v2:
         st.markdown("#### Overseas Emergency & Embassy Vault")
